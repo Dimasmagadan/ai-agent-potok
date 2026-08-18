@@ -1,0 +1,1235 @@
+{
+  "tools": [
+    {
+      "name": "list_jobs",
+      "description": "Когда нужно получить список вакансий — все, активные, архивные или по фильтру. Используй для обзора вакансий компании.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/jobs"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "by_scope": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived",
+              "all"
+            ],
+            "description": "Фильтр по статусу вакансий"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Номер страницы"
+          },
+          "per_page": {
+            "type": "integer",
+            "description": "Количество записей на странице"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_job",
+      "description": "Когда нужно получить детальную информацию по конкретной вакансии — описание, статус, рекрутер, этапы.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/jobs/:id"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "description": "ID вакансии"
+          }
+        },
+        "required": [
+          "job_id"
+        ]
+      }
+    },
+    {
+      "name": "create_job",
+      "description": "Когда нужно создать новую вакансию в Потоке. Используй при запросе на открытие позиции.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/jobs"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Название вакансии"
+          },
+          "city": {
+            "type": "string",
+            "description": "Город"
+          },
+          "salary_from": {
+            "type": "integer",
+            "description": "Зарплата от"
+          },
+          "salary_to": {
+            "type": "integer",
+            "description": "Зарплата до"
+          },
+          "schedule_type": {
+            "type": "string",
+            "description": "Тип графика работы"
+          },
+          "experience_type": {
+            "type": "string",
+            "description": "Требуемый опыт работы"
+          },
+          "description": {
+            "type": "string",
+            "description": "Описание вакансии"
+          },
+          "company_department_id": {
+            "type": "integer",
+            "description": "ID отдела компании"
+          },
+          "demand": {
+            "type": "integer",
+            "description": "Количество требуемых сотрудников"
+          },
+          "closure_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Планируемая дата закрытия (YYYY-MM-DD)"
+          },
+          "private": {
+            "type": "boolean",
+            "description": "Скрытая вакансия (не публикуется на карьерном сайте)"
+          },
+          "job_type": {
+            "type": "string",
+            "description": "Тип вакансии"
+          },
+          "priority": {
+            "type": "string",
+            "description": "Приоритет вакансии"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "update_job",
+      "description": "Когда нужно изменить параметры существующей вакансии — название, зарплату, описание и т.д.",
+      "http": {
+        "method": "PUT",
+        "path": "/api/v3/jobs/:id"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "description": "ID вакансии"
+          },
+          "name": {
+            "type": "string",
+            "description": "Название вакансии"
+          },
+          "city": {
+            "type": "string",
+            "description": "Город"
+          },
+          "salary_from": {
+            "type": "integer",
+            "description": "Зарплата от"
+          },
+          "salary_to": {
+            "type": "integer",
+            "description": "Зарплата до"
+          },
+          "schedule_type": {
+            "type": "string",
+            "description": "Тип графика работы"
+          },
+          "experience_type": {
+            "type": "string",
+            "description": "Требуемый опыт работы"
+          },
+          "description": {
+            "type": "string",
+            "description": "Описание вакансии"
+          },
+          "company_department_id": {
+            "type": "integer",
+            "description": "ID отдела компании"
+          },
+          "demand": {
+            "type": "integer",
+            "description": "Количество требуемых сотрудников"
+          },
+          "closure_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Планируемая дата закрытия (YYYY-MM-DD)"
+          },
+          "private": {
+            "type": "boolean",
+            "description": "Скрытая вакансия"
+          },
+          "job_type": {
+            "type": "string",
+            "description": "Тип вакансии"
+          },
+          "priority": {
+            "type": "string",
+            "description": "Приоритет вакансии"
+          }
+        },
+        "required": [
+          "job_id"
+        ]
+      }
+    },
+    {
+      "name": "change_job_state",
+      "description": "Когда нужно изменить статус вакансии — поставить на паузу, закрыть, отменить или переоткрыть.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/jobs/:job_id/change_state"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "description": "ID вакансии"
+          },
+          "transition": {
+            "type": "string",
+            "enum": [
+              "pause",
+              "close",
+              "cancel",
+              "reopen"
+            ],
+            "description": "Действие: pause — пауза, close — закрыть, cancel — отменить, reopen — переоткрыть"
+          }
+        },
+        "required": [
+          "job_id",
+          "transition"
+        ]
+      }
+    },
+    {
+      "name": "assign_recruiter",
+      "description": "Когда нужно назначить ответственного рекрутера на вакансию по email.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/jobs/:job_id/assign_executive_recruiter"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "description": "ID вакансии"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email рекрутера"
+          }
+        },
+        "required": [
+          "job_id",
+          "email"
+        ]
+      }
+    },
+    {
+      "name": "get_job_ajs_joins",
+      "description": "Когда нужно получить список кандидатов, привязанных к конкретной вакансии (с их этапами и статусами).",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/jobs/:job_id/ajs_joins"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "description": "ID вакансии"
+          },
+          "applicant_id": {
+            "type": "integer",
+            "description": "Фильтр по ID кандидата"
+          },
+          "page_size": {
+            "type": "integer",
+            "description": "Размер страницы"
+          },
+          "page_cursor": {
+            "type": "string",
+            "description": "Курсор для пагинации"
+          }
+        },
+        "required": [
+          "job_id"
+        ]
+      }
+    },
+    {
+      "name": "get_job_state_histories",
+      "description": "Когда нужно получить историю изменений статусов вакансий — кто и когда менял статус.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/jobs/state_histories"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "description": "Размер страницы"
+          },
+          "page_cursor": {
+            "type": "string",
+            "description": "Курсор для пагинации"
+          },
+          "created_at_from": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата начала периода (ISO 8601)"
+          },
+          "created_at_to": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата конца периода (ISO 8601)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "add_users_to_jobs",
+      "description": "Когда нужно добавить пользователей (нанимающих менеджеров, наблюдателей) к вакансиям пакетно.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/jobs_users"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "jobs_users": {
+            "type": "array",
+            "description": "Массив связей пользователь-вакансия",
+            "items": {
+              "type": "object",
+              "properties": {
+                "job_id": {
+                  "type": "integer",
+                  "description": "ID вакансии"
+                },
+                "user_id": {
+                  "type": "integer",
+                  "description": "ID пользователя"
+                },
+                "role": {
+                  "type": "string",
+                  "description": "Роль пользователя на вакансии"
+                }
+              },
+              "required": [
+                "job_id",
+                "user_id"
+              ]
+            }
+          }
+        },
+        "required": [
+          "jobs_users"
+        ]
+      }
+    },
+    {
+      "name": "list_applicants",
+      "description": "Когда нужно получить список кандидатов с фильтрацией и поиском. Точный поиск по телефону/email — через фильтр f (f[phones][], f[emails][]); полнотекстовый поиск по ФИО — через q в формате Rails nested params.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/applicants"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "description": "Номер страницы"
+          },
+          "per_page": {
+            "type": "integer",
+            "description": "Количество записей на странице"
+          },
+          "q": {
+            "type": "array",
+            "description": "Полнотекстовый поиск. Rails nested params: q[][s]=<строка>&q[][types][]=fios|phones|emails&q[][op]=and|or. НЕ передавать JSON-строкой."
+          },
+          "f": {
+            "type": "object",
+            "description": "Точные фильтры. f[phones][] — телефон (цифры с кодом страны, без +, напр. 79161234567), f[emails][] — email (осн. и доп. адреса), до 50 значений за запрос. Также: jobs, stages, stage_types, tags, sources, cities, responsible_users, created_at, born, salary и др."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_applicant",
+      "description": "Когда нужно получить полную карточку кандидата — контакты, резюме, историю по вакансиям.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/applicants/:id"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "applicant_id": {
+            "type": "integer",
+            "description": "ID кандидата"
+          }
+        },
+        "required": [
+          "applicant_id"
+        ]
+      }
+    },
+    {
+      "name": "create_applicant",
+      "description": "Когда нужно добавить нового кандидата в базу и опционально привязать к вакансии.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/applicants"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "first_name": {
+            "type": "string",
+            "description": "Имя кандидата"
+          },
+          "last_name": {
+            "type": "string",
+            "description": "Фамилия кандидата"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Телефон"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email"
+          },
+          "job_id": {
+            "type": "integer",
+            "description": "ID вакансии для привязки"
+          },
+          "resume": {
+            "type": "string",
+            "description": "Текст резюме"
+          },
+          "city": {
+            "type": "string",
+            "description": "Город проживания"
+          },
+          "born": {
+            "type": "string",
+            "format": "date",
+            "description": "Дата рождения (YYYY-MM-DD)"
+          },
+          "salary": {
+            "type": "integer",
+            "description": "Ожидаемая зарплата"
+          }
+        },
+        "required": [
+          "first_name",
+          "last_name"
+        ]
+      }
+    },
+    {
+      "name": "update_applicant",
+      "description": "Когда нужно обновить данные существующего кандидата — контакты, город, зарплатные ожидания.",
+      "http": {
+        "method": "PUT",
+        "path": "/api/v3/applicants/:id"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "applicant_id": {
+            "type": "integer",
+            "description": "ID кандидата"
+          },
+          "first_name": {
+            "type": "string",
+            "description": "Имя кандидата"
+          },
+          "last_name": {
+            "type": "string",
+            "description": "Фамилия кандидата"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Телефон"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email"
+          },
+          "resume": {
+            "type": "string",
+            "description": "Текст резюме"
+          },
+          "city": {
+            "type": "string",
+            "description": "Город проживания"
+          },
+          "born": {
+            "type": "string",
+            "format": "date",
+            "description": "Дата рождения (YYYY-MM-DD)"
+          },
+          "salary": {
+            "type": "integer",
+            "description": "Ожидаемая зарплата"
+          }
+        },
+        "required": [
+          "applicant_id"
+        ]
+      }
+    },
+    {
+      "name": "search_applicants_v2",
+      "description": "Когда нужен полнотекстовый поиск кандидатов по имени, навыкам или другим критериям (v2 API).",
+      "http": {
+        "method": "GET",
+        "path": "/api/v2/applicants"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Поисковый запрос"
+          },
+          "by_scope": {
+            "type": "string",
+            "description": "Скоуп поиска"
+          },
+          "by_job_id": {
+            "type": "integer",
+            "description": "Фильтр по ID вакансии"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Номер страницы"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "depersonalize_applicant",
+      "description": "Когда нужно удалить персональные данные кандидата (GDPR/152-ФЗ). Необратимая операция.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/applicants/:applicant_id/depersonalize"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "applicant_id": {
+            "type": "integer",
+            "description": "ID кандидата"
+          }
+        },
+        "required": [
+          "applicant_id"
+        ]
+      }
+    },
+    {
+      "name": "upload_resume",
+      "description": "Когда нужно загрузить файл резюме (PDF, DOC) к карточке кандидата.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/applicants/:id/resume_file"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "applicant_id": {
+            "type": "integer",
+            "description": "ID кандидата"
+          },
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "Файл резюме (multipart upload)"
+          }
+        },
+        "required": [
+          "applicant_id",
+          "file"
+        ]
+      }
+    },
+    {
+      "name": "add_to_job",
+      "description": "Когда нужно привязать кандидата к вакансии — добавить в воронку подбора на определённый этап.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/ajs_joins"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "description": "ID вакансии"
+          },
+          "applicant_id": {
+            "type": "integer",
+            "description": "ID кандидата"
+          },
+          "stage_type": {
+            "type": "string",
+            "description": "Тип этапа, на который добавить кандидата"
+          }
+        },
+        "required": [
+          "job_id",
+          "applicant_id"
+        ]
+      }
+    },
+    {
+      "name": "move_to_next_stage",
+      "description": "Когда нужно продвинуть кандидата на следующий этап воронки подбора.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/ajs_joins/:id/move_to_next_stage"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ajs_id": {
+            "type": "integer",
+            "description": "ID привязки кандидат-вакансия (ajs_join)"
+          }
+        },
+        "required": [
+          "ajs_id"
+        ]
+      }
+    },
+    {
+      "name": "change_stage",
+      "description": "Когда нужно переместить кандидата на конкретный этап воронки по ID этапа.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/ajs_joins/:id/change_stage"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ajs_id": {
+            "type": "integer",
+            "description": "ID привязки кандидат-вакансия (ajs_join)"
+          },
+          "stage_id": {
+            "type": "integer",
+            "description": "ID целевого этапа"
+          }
+        },
+        "required": [
+          "ajs_id",
+          "stage_id"
+        ]
+      }
+    },
+    {
+      "name": "move_to_stage_type",
+      "description": "Когда нужно переместить кандидата на этап по типу (например, 'interview', 'offer') без знания конкретного stage_id.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/ajs_joins/:id/move_to_stage_type"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ajs_id": {
+            "type": "integer",
+            "description": "ID привязки кандидат-вакансия (ajs_join)"
+          },
+          "to_stage_type": {
+            "type": "string",
+            "description": "Тип целевого этапа"
+          }
+        },
+        "required": [
+          "ajs_id",
+          "to_stage_type"
+        ]
+      }
+    },
+    {
+      "name": "change_state",
+      "description": "Когда нужно изменить состояние кандидата на вакансии (например, принять оффер, вывести на работу).",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/ajs_joins/:id/change_state"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ajs_id": {
+            "type": "integer",
+            "description": "ID привязки кандидат-вакансия (ajs_join)"
+          },
+          "state_id": {
+            "type": "integer",
+            "description": "ID целевого состояния"
+          }
+        },
+        "required": [
+          "ajs_id",
+          "state_id"
+        ]
+      }
+    },
+    {
+      "name": "update_ajs_join",
+      "description": "Когда нужно обновить данные привязки кандидата к вакансии — плановую дату выхода или demand.",
+      "http": {
+        "method": "PATCH",
+        "path": "/api/v3/ajs_joins/:id"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ajs_id": {
+            "type": "integer",
+            "description": "ID привязки кандидат-вакансия (ajs_join)"
+          },
+          "planned_employment_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Планируемая дата выхода на работу (YYYY-MM-DD)"
+          },
+          "demand_id": {
+            "type": "integer",
+            "description": "ID потребности (demand)"
+          }
+        },
+        "required": [
+          "ajs_id"
+        ]
+      }
+    },
+    {
+      "name": "decline_applicant",
+      "description": "Когда нужно отказать кандидату на вакансии с указанием причины отказа.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/jobs/:job_id/:applicant_id/decline.json"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "description": "ID вакансии"
+          },
+          "applicant_id": {
+            "type": "integer",
+            "description": "ID кандидата"
+          },
+          "declination_reason_id": {
+            "type": "integer",
+            "description": "ID причины отказа (из справочника declination_reasons)"
+          }
+        },
+        "required": [
+          "job_id",
+          "applicant_id",
+          "declination_reason_id"
+        ]
+      }
+    },
+    {
+      "name": "list_events",
+      "description": "Когда нужно получить историю событий по кандидату — комментарии, переходы по этапам, звонки.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v2/events"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "description": "Номер страницы"
+          },
+          "per_page": {
+            "type": "integer",
+            "description": "Количество записей на странице"
+          },
+          "applicant_id": {
+            "type": "integer",
+            "description": "Фильтр по ID кандидата"
+          },
+          "by_created_at": {
+            "type": "string",
+            "description": "Фильтр по дате создания"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_events_stream",
+      "description": "Когда нужно получить поток событий с курсорной пагинацией — для синхронизации или мониторинга изменений.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v2/events_stream"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "description": "Размер страницы"
+          },
+          "page_cursor": {
+            "type": "string",
+            "description": "Курсор для пагинации"
+          },
+          "applicant_id": {
+            "type": "integer",
+            "description": "Фильтр по ID кандидата"
+          },
+          "by_created_at": {
+            "type": "string",
+            "description": "Фильтр по дате создания"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "add_comment",
+      "description": "Когда нужно оставить комментарий к кандидату — заметку, результат звонка, обратную связь.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v2/events"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "applicant_id": {
+            "type": "integer",
+            "description": "ID кандидата"
+          },
+          "body": {
+            "type": "string",
+            "description": "Текст комментария"
+          },
+          "type": {
+            "type": "string",
+            "description": "Тип события (comment, call и др.)"
+          },
+          "job_id": {
+            "type": "integer",
+            "description": "ID вакансии (опционально, для привязки к конкретной вакансии)"
+          },
+          "private": {
+            "type": "boolean",
+            "description": "Приватный комментарий (виден только рекрутерам)"
+          },
+          "attach_document_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Массив ID прикреплённых документов"
+          }
+        },
+        "required": [
+          "applicant_id",
+          "body"
+        ]
+      }
+    },
+    {
+      "name": "upload_document",
+      "description": "Когда нужно загрузить документ (файл) и привязать к кандидату или вакансии.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v2/documents"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "attach": {
+            "type": "string",
+            "format": "binary",
+            "description": "Файл для загрузки (multipart)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Название документа"
+          },
+          "target": {
+            "type": "string",
+            "description": "Тип объекта-владельца (applicant, job и др.)"
+          },
+          "target_id": {
+            "type": "integer",
+            "description": "ID объекта-владельца"
+          },
+          "category": {
+            "type": "string",
+            "description": "Категория документа (из available_categories)"
+          }
+        },
+        "required": [
+          "attach"
+        ]
+      }
+    },
+    {
+      "name": "get_document_categories",
+      "description": "Когда нужно узнать доступные категории документов для загрузки.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v2/documents/available_categories"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "create_reminder",
+      "description": "Когда нужно создать напоминание — перезвонить кандидату, проверить статус, напомнить о задаче.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/calendar/reminders"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reminder": {
+            "type": "object",
+            "description": "Параметры напоминания",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Заголовок напоминания"
+              },
+              "description": {
+                "type": "string",
+                "description": "Описание"
+              },
+              "remind_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Дата и время напоминания (ISO 8601)"
+              },
+              "applicant_id": {
+                "type": "integer",
+                "description": "ID кандидата"
+              },
+              "job_id": {
+                "type": "integer",
+                "description": "ID вакансии"
+              }
+            },
+            "required": [
+              "title",
+              "remind_at"
+            ]
+          }
+        },
+        "required": [
+          "reminder"
+        ]
+      }
+    },
+    {
+      "name": "create_schedule",
+      "description": "Когда нужно создать событие в календаре — собеседование, встречу с кандидатом или командой.",
+      "http": {
+        "method": "POST",
+        "path": "/api/v3/calendar/schedules"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "schedule": {
+            "type": "object",
+            "description": "Параметры события",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Название события"
+              },
+              "description": {
+                "type": "string",
+                "description": "Описание"
+              },
+              "starts_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Начало события (ISO 8601)"
+              },
+              "ends_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Конец события (ISO 8601)"
+              },
+              "applicant_id": {
+                "type": "integer",
+                "description": "ID кандидата"
+              },
+              "job_id": {
+                "type": "integer",
+                "description": "ID вакансии"
+              },
+              "participant_ids": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "ID участников"
+              }
+            },
+            "required": [
+              "title",
+              "starts_at",
+              "ends_at"
+            ]
+          }
+        },
+        "required": [
+          "schedule"
+        ]
+      }
+    },
+    {
+      "name": "list_users",
+      "description": "Когда нужно получить список пользователей системы (рекрутеры, менеджеры) или найти по email.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/users"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "description": "Номер страницы"
+          },
+          "per_page": {
+            "type": "integer",
+            "description": "Количество записей на странице"
+          },
+          "f_emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Фильтр по массиву email-адресов"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_user",
+      "description": "Когда нужно получить информацию о конкретном пользователе системы по ID.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/users/:id"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "description": "ID пользователя"
+          }
+        },
+        "required": [
+          "user_id"
+        ]
+      }
+    },
+    {
+      "name": "list_dictionaries",
+      "description": "Когда нужно получить список справочников компании (кастомные поля, словари).",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/dictionaries"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "description": "Размер страницы"
+          },
+          "page_cursor": {
+            "type": "string",
+            "description": "Курсор для пагинации"
+          },
+          "q": {
+            "type": "string",
+            "description": "Поиск по названию справочника"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_dictionary_items",
+      "description": "Когда нужно получить элементы конкретного справочника (значения кастомного поля).",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/dictionaries/:id/items"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "dictionary_id": {
+            "type": "integer",
+            "description": "ID справочника"
+          },
+          "page_size": {
+            "type": "integer",
+            "description": "Размер страницы"
+          },
+          "q": {
+            "type": "string",
+            "description": "Поиск по названию элемента"
+          }
+        },
+        "required": [
+          "dictionary_id"
+        ]
+      }
+    },
+    {
+      "name": "get_cities",
+      "description": "Когда нужно найти город из справочника Потока — для создания вакансии или кандидата.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/dictionaries/cities"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "Поиск по названию города"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_declination_reasons",
+      "description": "Когда нужно получить справочник причин отказа — для выбора причины при отклонении кандидата.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v2/declination_reasons"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "get_departments",
+      "description": "Когда нужно получить список отделов компании — для привязки вакансии к подразделению.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v2/company_departments"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "list_finalists",
+      "description": "Когда нужно получить список финалистов (кандидатов на финальном этапе) по вакансии.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/finalists"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "description": "Фильтр по ID вакансии"
+          },
+          "state": {
+            "type": "string",
+            "description": "Фильтр по состоянию финалиста"
+          },
+          "page_size": {
+            "type": "integer",
+            "description": "Размер страницы"
+          },
+          "page_cursor": {
+            "type": "string",
+            "description": "Курсор для пагинации"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_finalist",
+      "description": "Когда нужно получить детальную информацию о конкретном финалисте по ID.",
+      "http": {
+        "method": "GET",
+        "path": "/api/v3/finalists/:id"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "finalist_id": {
+            "type": "integer",
+            "description": "ID финалиста"
+          }
+        },
+        "required": [
+          "finalist_id"
+        ]
+      }
+    }
+  ]
+}
