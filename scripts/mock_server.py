@@ -60,5 +60,9 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
+    try:
+        server = HTTPServer(("localhost", port), Handler)
+    except OSError:
+        sys.exit(f"Порт {port} занят — возможно, mock-сервер уже запущен (другой порт: python3 scripts/mock_server.py {port + 1})")
     print(f"Mock Potok API на http://localhost:{port} (фикстуры: {FIXTURES})")
-    HTTPServer(("localhost", port), Handler).serve_forever()
+    server.serve_forever()

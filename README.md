@@ -23,6 +23,8 @@ python3 scripts/talent_pool.py reserve            # 8 кандидатов ре�
 python3 scripts/talent_pool.py dedup              # 2 пары дублей (phone, email)
 python3 scripts/talent_pool.py reserve > /tmp/reserve.json
 python3 scripts/talent_pool.py search '[{"term":"питон","kind":"original"},{"term":"python","kind":"synonym"}]' --reserve-file /tmp/reserve.json
+
+python3 scripts/test_talent_pool.py               # тесты ядра (stdlib unittest)
 ```
 
 Фикстуры — `fixtures/*.json` (обезличенные, придуманные данные): 10
@@ -45,6 +47,9 @@ python3 scripts/talent_pool.py search '[{"term":"питон","kind":"original"},
   429-backoff — внутри.
 - `scripts/mock_server.py` — мини-HTTP-сервер на `http.server`, отдаёт
   `fixtures/*.json` в тех же форматах ответа, что и реальный API v3.
+- `scripts/test_talent_pool.py` — тесты ядра (резерв, дедуп, поиск) на
+  stdlib `unittest`: регрессии на нормализацию телефона (`8`/`+7`), матчинг
+  по словам вместо подстроки («java» ≠ «JavaScript»), логику резерва.
 - `SKILL.md` — инструкция для LLM: как расширять запрос синонимами, как
   вызывать скрипты, в каком формате отвечать рекрутеру.
 
@@ -52,8 +57,8 @@ python3 scripts/talent_pool.py search '[{"term":"питон","kind":"original"},
 
 - Матчинг — по `title`/`tags` кандидата, не по тексту резюме (API отдаёт
   только ссылку на файл резюме, не текст).
-- Дедуп — точное совпадение нормализованного телефона/email, без fuzzy по
-  ФИО (Иван/Ваня, опечатки).
+- Дедуп — точное совпадение нормализованного телефона/email (форматирование
+  и ведущая `7`/`8` в номере не важны), без fuzzy по ФИО (Иван/Ваня, опечатки).
 - Резерв не фильтруется по причине отказа отклонённых кандидатов.
 - Нет семантического поиска/embeddings, нет записи в «Поток» (write-back
   отсутствует полностью).

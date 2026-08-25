@@ -19,6 +19,16 @@ TOKEN = os.environ.get("POTOK_API_TOKEN", "")
 HIRED_EXCLUDE_STATES = {"cancel_hire", "hire_canceled"}
 
 
+def _retry_delay(error, attempt):
+    retry_after = error.headers.get("Retry-After") if error.headers else None
+    if retry_after:
+        try:
+            return min(float(retry_after), 30)
+        except ValueError:
+            pass
+    return 2**attempt
+
+
 def _request(path, params=None):
     url = f"{BASE_URL}{path}"
     if params:
@@ -26,11 +36,11 @@ def _request(path, params=None):
     req = Request(url, headers={"Authorization": f"Bearer {TOKEN}"})
     for attempt in range(4):
         try:
-            with urlopen(req) as resp:
+            with urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read())
         except HTTPError as e:
             if e.code == 429 and attempt < 3:
-                time.sleep(2**attempt)
+                time.sleep(_retry_delay(e, attempt))
                 continue
             raise
     raise RuntimeError("превышено число повторов после 429")
@@ -90,7 +100,10 @@ def build_reserve_pool():
 
 
 def _normalize_phone(phone):
-    return re.sub(r"\D", "", phone or "")
+    digits = re.sub(r"\D", "", phone or "")
+    if len(digits) == 11 and digits[0] in "78":
+        digits = digits[1:]
+    return digits
 
 
 def find_duplicates(applicants=None):
@@ -114,12 +127,24 @@ def find_duplicates(applicants=None):
     return groups
 
 
+TOKEN_RE = re.compile(r"[\w#+]+")
+
+
+def _tokens(text):
+    return TOKEN_RE.findall((text or "").lower())
+
+
+def _term_matches(term, haystack_tokens):
+    term_tokens = _tokens(term)
+    return bool(term_tokens) and all(t in haystack_tokens for t in term_tokens)
+
+
 def search_reserve(reserve, terms, top_n=10):
     """terms: [{"term": str, "kind": "original"|"synonym"}, ...]"""
     results = []
     for a in reserve:
-        haystack = " ".join([a.get("title") or ""] + (a.get("tags") or [])).lower()
-        matched = [t for t in terms if t["term"].lower() in haystack]
+        haystack_tokens = set(_tokens(" ".join([a.get("title") or ""] + (a.get("tags") or []))))
+        matched = [t for t in terms if _term_matches(t["term"], haystack_tokens)]
         if matched:
             results.append(
                 {
