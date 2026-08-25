@@ -1,0 +1,61 @@
+# Talent Pool: поиск по кадровому резерву + дедупликация («Поток»)
+
+Read-only чат-скилл для LLM поверх открытого API «Потока»
+(events.potok.io/ai_agent_hr_contest). Что и почему — [`SDD-C06-TALENT-POOL.md`](SDD-C06-TALENT-POOL.md),
+триггер и инструкции для LLM — [`SKILL.md`](SKILL.md).
+
+1. Рекрутер описывает свободным текстом, кто нужен, — скилл ищет подходящих
+   кандидатов в кадровом резерве (без активной вакансии, не нанятые), с
+   LLM-расширением запроса синонимами и evidence-цитатами.
+2. Скилл находит дубли кандидатов в базе (точное совпадение телефона/email).
+
+Никакой записи в «Поток»: ни тегов, ни комментариев, ни перемещений по
+воронке.
+
+## Запуск на fixtures (без токена, за 30 секунд)
+
+```bash
+python3 scripts/mock_server.py &
+export POTOK_BASE_URL=http://localhost:8765
+export POTOK_API_TOKEN=demo
+
+python3 scripts/talent_pool.py reserve            # 8 кандидатов резерва
+python3 scripts/talent_pool.py dedup              # 2 пары дублей (phone, email)
+python3 scripts/talent_pool.py reserve > /tmp/reserve.json
+python3 scripts/talent_pool.py search '[{"term":"питон","kind":"original"},{"term":"python","kind":"synonym"}]' --reserve-file /tmp/reserve.json
+```
+
+Фикстуры — `fixtures/*.json` (обезличенные, придуманные данные): 10
+кандидатов, 1 активный на вакансии, 1 нанятый финалист, 1 финалист с
+отменённым наймом (возвращается в резерв), 2 пары дублей, кандидат
+«Junior Frontend developer» для проверки синонима «джун».
+
+## Запуск на реальном тенанте
+
+1. Скопировать `.env.example` в `.env`, вписать `POTOK_API_TOKEN` (настройки
+   компании → «Генерация токенов») и `POTOK_BASE_URL` (по умолчанию —
+   песочница `https://demo.app.potok.io/api/v3`).
+2. Экспортировать переменные из `.env` в окружение (`set -a; source .env; set +a`
+   в bash/zsh) и запускать `scripts/talent_pool.py` как выше, без mock-сервера.
+
+## Устройство
+
+- `scripts/talent_pool.py` — резерв/дедуп/поиск, только stdlib (`urllib`),
+  без сторонних зависимостей. Пагинация (страничная и курсорная) и
+  429-backoff — внутри.
+- `scripts/mock_server.py` — мини-HTTP-сервер на `http.server`, отдаёт
+  `fixtures/*.json` в тех же форматах ответа, что и реальный API v3.
+- `SKILL.md` — инструкция для LLM: как расширять запрос синонимами, как
+  вызывать скрипты, в каком формате отвечать рекрутеру.
+
+## Ограничения (осознанно не в MVP)
+
+- Матчинг — по `title`/`tags` кандидата, не по тексту резюме (API отдаёт
+  только ссылку на файл резюме, не текст).
+- Дедуп — точное совпадение нормализованного телефона/email, без fuzzy по
+  ФИО (Иван/Ваня, опечатки).
+- Резерв не фильтруется по причине отказа отклонённых кандидатов.
+- Нет семантического поиска/embeddings, нет записи в «Поток» (write-back
+  отсутствует полностью).
+
+Полный разбор — §5 [`SDD-C06-TALENT-POOL.md`](SDD-C06-TALENT-POOL.md).
