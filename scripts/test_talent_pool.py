@@ -584,6 +584,41 @@ class ReopenIntegrationTests(unittest.TestCase):
         self.assertFalse(result["completeness"]["ranking_complete"])
         self.assertTrue(any(w["code"] == "SOURCE_JOINS_PARTIAL" for w in result["warnings"]))
 
+    def test_declination_reason_and_date_fallback_to_decline_event(self):
+        # Реальный тенант (проверено на песочнице) не отдаёт declination_reason_id/
+        # declined_at на ajs_join — только на Event::Decline. reopen должен подхватить
+        # оба поля оттуда, если на ajs_join их нет.
+        def request_without_join_fields(path, params=None, base=None):
+            if path == "/jobs/201/ajs_joins.json":
+                objects = [dict(a) for a in self.AJS_201]
+                objects[0]["declination_reason_id"] = None
+                objects[0]["declined_at"] = None
+                return {"objects": objects, "has_next_page": False, "page_next_cursor": None}
+            if path == "/declination_reasons.json":
+                return [{"id": 34, "name": "Недостаток опыта"}]
+            if path == "/events.json" and params and params.get("applicant_id") == 21:
+                return {
+                    "data": [
+                        {
+                            "type": "Event::Decline",
+                            "job_id": 201,
+                            "created_at": "2026-06-05T00:00:00Z",
+                            "properties": {"declination_reason_id": 34},
+                        }
+                    ],
+                    "page": 1,
+                    "pages": 1,
+                    "per_page": 50,
+                }
+            return self._fake_request(path, params, base)
+
+        with patch.object(tp, "_request", side_effect=request_without_join_fields):
+            result, exit_code = tp.run_reopen(self._request())
+        self.assertEqual(exit_code, 0)
+        candidate = next(c for c in result["candidates"] if c["applicant_id"] == 21)
+        self.assertEqual(candidate["declined_at"], "2026-06-05T00:00:00Z")
+        self.assertEqual(candidate["confirmed_declination_reason"], {"id": 34, "name": "Недостаток опыта"})
+
     def test_no_supported_diff_is_validation_error(self):
         with patch.object(tp, "_request", side_effect=self._fake_request):
             result, exit_code = tp.run_reopen(

@@ -735,30 +735,43 @@ def _load_declination_reasons():
 
 
 def _fetch_comments_for(applicant_id, source_job_id):
+    """Отдаёт (comments, decline) для applicant_id/source_job_id.
+
+    Реальный тенант (проверено на песочнице 2026-09-03) не возвращает
+    declination_reason_id/declined_at на ajs_join, вопреки документации API —
+    причина и дата лежат в properties события Event::Decline. Извлекаем их
+    здесь же, без лишнего запроса: события уже читаются для комментариев.
+    """
     params = {"applicant_id": applicant_id, "page": 1, "per_page": 50}
     comments = []
+    decline = None
     try:
         base = _v2_base_url()
     except ReopenValidationError:
-        return None
+        return None, None
     while True:
         try:
             body = _request("/events.json", params, base=base)
         except FetchError:
-            return None
+            return None, None
         if not isinstance(body, dict) or not isinstance(body.get("data"), list) or not isinstance(body.get("pages"), int):
-            return None
+            return None, None
         if body["pages"] < params["page"]:
-            return None
+            return None, None
         for ev in body["data"]:
             if not isinstance(ev, dict):
-                return None
+                return None, None
             if ev.get("type") == "Event::Comment" and ev.get("job_id") == source_job_id:
                 if not all(k in ev for k in ("id", "body", "created_at")):
-                    return None
+                    return None, None
                 comments.append(ev)
+            elif ev.get("type") == "Event::Decline" and ev.get("job_id") == source_job_id:
+                props = ev.get("properties")
+                reason_id = props.get("declination_reason_id") if isinstance(props, dict) else None
+                if isinstance(reason_id, int):
+                    decline = {"declination_reason_id": reason_id, "declined_at": ev.get("created_at")}
         if params["page"] >= body["pages"]:
-            return comments
+            return comments, decline
         params["page"] += 1
 
 
@@ -1081,12 +1094,15 @@ def run_reopen(request, mapping=None, top=20):
             continue
         cards_loaded += 1
         applicant = dict(applicant)
-        applicant.setdefault("declination_reason_id", join.get("declination_reason_id"))
 
-        comments = _fetch_comments_for(aid, source_job_id)
+        comments, decline = _fetch_comments_for(aid, source_job_id)
         if comments is None:
             failed_events.append(aid)
             comments = []
+        applicant["declination_reason_id"] = join.get("declination_reason_id")
+        if applicant["declination_reason_id"] is None and decline:
+            applicant["declination_reason_id"] = decline["declination_reason_id"]
+        declined_at = join.get("declined_at") or (decline["declined_at"] if decline else None)
 
         signals = []
         for fn in (
@@ -1113,7 +1129,7 @@ def run_reopen(request, mapping=None, top=20):
                 "name": name,
                 "url": url,
                 "source_job_id": source_job_id,
-                "declined_at": join.get("declined_at"),
+                "declined_at": declined_at,
                 "confirmed_declination_reason": (
                     {"id": applicant["declination_reason_id"], "name": reasons_dict[applicant["declination_reason_id"]]}
                     if applicant.get("declination_reason_id") is not None and reasons_dict and applicant["declination_reason_id"] in reasons_dict
