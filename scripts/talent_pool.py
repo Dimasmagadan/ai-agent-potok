@@ -9,7 +9,7 @@ import os
 import re
 import sys
 import time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -17,6 +17,10 @@ BASE_URL = os.environ.get("POTOK_BASE_URL", "").rstrip("/")
 TOKEN = os.environ.get("POTOK_API_TOKEN", "")
 
 HIRED_EXCLUDE_STATES = {"cancel_hire", "hire_canceled"}
+
+
+class FetchError(RuntimeError):
+    """An API page could not be retrieved after retrying."""
 
 
 def _retry_delay(error, attempt):
@@ -40,62 +44,80 @@ def _request(path, params=None):
                 return json.loads(resp.read())
         except HTTPError as e:
             if e.code == 429 and attempt < 3:
-                time.sleep(_retry_delay(e, attempt))
+                delay = _retry_delay(e, attempt)
+                e.close()
+                time.sleep(delay)
                 continue
-            raise
-    raise RuntimeError("превышено число повторов после 429")
+            status = e.code
+            e.close()
+            raise FetchError(f"{path}: HTTP {status}") from e
+        except (URLError, TimeoutError) as e:
+            raise FetchError(f"{path}: ошибка сети ({e})") from e
+    raise FetchError(f"{path}: превышено число повторов после 429")
 
 
-def _paginate_page(path, params=None):
+def _paginate_page(path, params=None, warnings=None):
     params = dict(params or {}, page=1, per_page=100)
     while True:
-        body = _request(path, params)
+        try:
+            body = _request(path, params)
+        except FetchError as e:
+            if warnings is None:
+                raise
+            warnings.append(str(e))
+            return
         yield from body["data"]
         if params["page"] >= body["pages"]:
             return
         params["page"] += 1
 
 
-def _paginate_cursor(path, params=None):
+def _paginate_cursor(path, params=None, warnings=None):
     params = dict(params or {}, page_size=100)
     while True:
-        body = _request(path, params)
+        try:
+            body = _request(path, params)
+        except FetchError as e:
+            if warnings is None:
+                raise
+            warnings.append(str(e))
+            return
         yield from body["objects"]
         if not body.get("has_next_page"):
             return
         params["page_cursor"] = body["page_next_cursor"]
 
 
-def all_jobs():
-    return list(_paginate_page("/jobs.json", {"by_scope": "all"}))
+def all_jobs(warnings=None):
+    return list(_paginate_page("/jobs.json", {"by_scope": "all"}, warnings))
 
 
-def all_applicants():
-    return list(_paginate_page("/applicants.json"))
+def all_applicants(warnings=None):
+    return list(_paginate_page("/applicants.json", warnings=warnings))
 
 
-def build_active_ids(jobs=None):
+def build_active_ids(jobs=None, warnings=None):
     ids = set()
-    for job in jobs if jobs is not None else all_jobs():
-        for join in _paginate_cursor(f"/jobs/{job['id']}/ajs_joins.json"):
+    for job in jobs if jobs is not None else all_jobs(warnings):
+        for join in _paginate_cursor(f"/jobs/{job['id']}/ajs_joins.json", warnings=warnings):
             if join.get("active"):
                 ids.add(join["applicant_id"])
     return ids
 
 
-def build_hired_ids():
+def build_hired_ids(warnings=None):
     ids = set()
-    for fin in _paginate_cursor("/finalists.json"):
+    for fin in _paginate_cursor("/finalists.json", warnings=warnings):
         if fin.get("state") not in HIRED_EXCLUDE_STATES:
             ids.add(fin["applicant_id"])
     return ids
 
 
-def build_reserve_pool():
-    jobs = all_jobs()
-    active_ids = build_active_ids(jobs)
-    hired_ids = build_hired_ids()
-    applicants = all_applicants()
+def build_reserve_pool(warnings=None):
+    jobs = all_jobs(warnings)
+    active_ids = build_active_ids(jobs, warnings)
+    hired_ids = build_hired_ids(warnings)
+    applicants = all_applicants(warnings)
     return [a for a in applicants if a["id"] not in active_ids and a["id"] not in hired_ids]
 
 
@@ -106,8 +128,8 @@ def _normalize_phone(phone):
     return digits
 
 
-def find_duplicates(applicants=None):
-    applicants = applicants if applicants is not None else all_applicants()
+def find_duplicates(applicants=None, warnings=None):
+    applicants = applicants if applicants is not None else all_applicants(warnings)
     by_phone, by_email = {}, {}
     for a in applicants:
         for p in a.get("phones") or []:
@@ -179,18 +201,22 @@ def main():
     if not BASE_URL or not TOKEN:
         sys.exit("POTOK_BASE_URL / POTOK_API_TOKEN не заданы (см. .env)")
 
+    warnings = []
     if args.cmd == "reserve":
-        print(json.dumps(build_reserve_pool(), ensure_ascii=False, indent=2))
+        print(json.dumps(build_reserve_pool(warnings), ensure_ascii=False, indent=2))
     elif args.cmd == "dedup":
-        print(json.dumps(find_duplicates(), ensure_ascii=False, indent=2))
+        print(json.dumps(find_duplicates(warnings=warnings), ensure_ascii=False, indent=2))
     elif args.cmd == "search":
         terms = json.loads(args.terms_json)
         if args.reserve_file:
             with open(args.reserve_file, encoding="utf-8") as f:
                 reserve = json.load(f)
         else:
-            reserve = build_reserve_pool()
+            reserve = build_reserve_pool(warnings)
         print(json.dumps(search_reserve(reserve, terms, args.top), ensure_ascii=False, indent=2))
+
+    for warning in warnings:
+        print(f"ПРЕДУПРЕЖДЕНИЕ: частичный результат, {warning}", file=sys.stderr)
 
 
 if __name__ == "__main__":

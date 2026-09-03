@@ -24,8 +24,13 @@ python3 scripts/talent_pool.py dedup              # 2 пары дублей (pho
 python3 scripts/talent_pool.py reserve > /tmp/reserve.json
 python3 scripts/talent_pool.py search '[{"term":"питон","kind":"original"},{"term":"python","kind":"synonym"}]' --reserve-file /tmp/reserve.json
 
-python3 scripts/test_talent_pool.py               # тесты ядра (stdlib unittest)
+python3 scripts/test_talent_pool.py               # 17 тестов ядра (stdlib unittest)
 ```
+
+`reserve`, `dedup` и поиск возвращают уже собранную часть данных, если API
+перестаёт отвечать во время обхода страниц. В этом случае предупреждение
+`частичный результат` выводится в stderr: не используйте такую выдачу как
+полный отчёт по базе.
 
 Фикстуры — `fixtures/*.json` (обезличенные, придуманные данные): 10
 кандидатов, 1 активный на вакансии, 1 нанятый финалист, 1 финалист с
@@ -64,3 +69,18 @@ python3 scripts/test_talent_pool.py               # тесты ядра (stdlib 
   отсутствует полностью).
 
 Полный разбор — §5 [`SDD-C06-TALENT-POOL.md`](SDD-C06-TALENT-POOL.md).
+
+## Проверка и релиз
+
+```bash
+make test
+make demo
+```
+
+GitHub Actions запускает тесты при каждом push и pull request. Это CLI-скилл,
+поэтому серверный deploy не требуется: релиз — публичный Git-тег с исходным
+кодом, fixtures и этой инструкцией.
+
+## Лицензия
+
+[MIT](LICENSE).
