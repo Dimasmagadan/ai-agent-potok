@@ -2,6 +2,7 @@
 .env
 __pycache__/
 .cv_cache/
+.cv_mock_fallback.json
 research/pains-v2/evidence.private.jsonl
 research/SDD-PAIN-RESEARCH-V2.md
 research/pains-v2/

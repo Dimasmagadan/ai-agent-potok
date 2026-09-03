@@ -4,6 +4,7 @@
 Запуск: python3 scripts/test_talent_pool.py (stdlib unittest, без зависимостей).
 """
 import json
+import os
 import tempfile
 import unittest
 from io import BytesIO
@@ -297,6 +298,31 @@ class CvIndexTests(unittest.TestCase):
                 stats = tp.cv_index_reserve(self._reserve(), cache_dir=d)
             self.assertEqual(stats["failed"], 1)
             self.assertEqual(stats["by_status"]["too_large"], 1)
+
+    def test_mock_fallback_used_only_when_download_fails_and_applicant_listed(self):
+        with tempfile.TemporaryDirectory() as d:
+            fallback_file = Path(d) / "fallback.json"
+            fallback_file.write_text(json.dumps({"1": "FastAPI резюме"}), encoding="utf-8")
+            with patch.object(tp, "_download_cv", return_value=(None, "download_failed")), patch.dict(
+                os.environ, {"CV_MOCK_FALLBACK_FILE": str(fallback_file)}
+            ):
+                stats = tp.cv_index_reserve(self._reserve(), cache_dir=d)
+            self.assertEqual(stats["indexed"], 1)
+            self.assertEqual(stats["by_status"]["ok_mock_fallback"], 1)
+            cached = json.loads((Path(d) / "1.json").read_text(encoding="utf-8"))
+            self.assertEqual(cached["status"], "ok")
+            self.assertEqual(cached["text"], "FastAPI резюме")
+            self.assertTrue(cached["mock_fallback"])
+
+    def test_no_mock_fallback_file_keeps_real_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(tp, "_download_cv", return_value=(None, "download_failed")), patch.dict(
+                os.environ, {}, clear=False
+            ):
+                os.environ.pop("CV_MOCK_FALLBACK_FILE", None)
+                stats = tp.cv_index_reserve(self._reserve(), cache_dir=d)
+            self.assertEqual(stats["failed"], 1)
+            self.assertNotIn("ok_mock_fallback", stats["by_status"])
 
 
 class SearchReserveCvTests(unittest.TestCase):

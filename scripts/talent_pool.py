@@ -181,8 +181,8 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def _cv_record(applicant_id, source_url, status, fmt, text):
-    return {
+def _cv_record(applicant_id, source_url, status, fmt, text, mock_fallback=False):
+    record = {
         "applicant_id": applicant_id,
         "source_url": source_url,
         "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -190,6 +190,25 @@ def _cv_record(applicant_id, source_url, status, fmt, text):
         "format": fmt,
         "text": text if status == "ok" else "",
     }
+    if mock_fallback:
+        record["mock_fallback"] = True
+    return record
+
+
+def _load_cv_mock_fallback():
+    """Временный костыль: GET cv_original этого тенанта отдаёт 403 SignatureDoesNotMatch
+    и без токена, и с ним (см. письмо в поддержку Потока от 2026-09-03). Пока ждём ответ,
+    CV_MOCK_FALLBACK_FILE (JSON {"<applicant_id>": "текст резюме"}) подставляет уже известный
+    нам текст вместо реального скачивания — только для явно перечисленных кандидатов, не как
+    общий фолбэк на любую ошибку сети. Удалить, когда скачивание заработает."""
+    path = os.environ.get("CV_MOCK_FALLBACK_FILE")
+    if not path:
+        return {}
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {int(k): v for k, v in raw.items()} if isinstance(raw, dict) else {}
 
 
 def _download_cv(url):
@@ -314,6 +333,18 @@ def cv_index_reserve(reserve, cache_dir=".cv_cache", limit=None):
         url = cv["cv_original"]
         data, err = _download_cv(url)
         if err:
+            mock_text = _load_cv_mock_fallback().get(aid)
+            if mock_text is not None:
+                print(
+                    f"[cv-mock-fallback] applicant {aid}: реальное скачивание вернуло "
+                    f"'{err}', использован CV_MOCK_FALLBACK_FILE вместо cv_original",
+                    file=sys.stderr,
+                )
+                record = _cv_record(aid, url, "ok", "mock", mock_text, mock_fallback=True)
+                cache_file.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+                stats["indexed"] += 1
+                stats["by_status"]["ok_mock_fallback"] = stats["by_status"].get("ok_mock_fallback", 0) + 1
+                continue
             record = _cv_record(aid, url, err, None, "")
             cache_file.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
             stats["failed"] += 1
