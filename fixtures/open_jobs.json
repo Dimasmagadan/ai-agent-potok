@@ -26,6 +26,24 @@
       "salary": {"from": 130000, "to": null, "currency": "RUR"},
       "schedule_type": "remote",
       "description": "<p>SQL, Python, дашборды.</p>"
+    },
+    {
+      "id": 45,
+      "name": "DevOps Engineer",
+      "department": {"name": "Платформа"},
+      "city": {"name": "Казань"},
+      "salary": {"from": 220000, "to": 330000, "currency": "RUR"},
+      "schedule_type": "remote",
+      "description": "<p>Docker, Kubernetes, Terraform и CI/CD.</p>"
+    },
+    {
+      "id": 46,
+      "name": "B2B Sales Manager",
+      "department": {"name": "Продажи"},
+      "city": {"name": "Москва"},
+      "salary": {"from": 160000, "to": 250000, "currency": "RUR"},
+      "schedule_type": "fullDay",
+      "description": "<p>Business development, поиск клиентов и ведение сделок.</p>"
     }
   ]
 }

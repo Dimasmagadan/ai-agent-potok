@@ -1,6 +1,8 @@
 [
   {"id": 101, "name": "Backend-разработчик (Java)"},
   {"id": 102, "name": "Frontend-разработчик (React)"},
+  {"id": 103, "name": "DevOps engineer"},
+  {"id": 104, "name": "B2B Sales Manager"},
   {
     "id": 201,
     "name": "Python Backend Developer (архивная версия)",
@@ -8,6 +10,7 @@
     "currency_type": "RUR",
     "schedule_type": "fullDay",
     "experience_type": "between3And6",
+    "experience_minimum_years": 3,
     "city": "1"
   },
   {
@@ -17,6 +20,7 @@
     "currency_type": "RUR",
     "schedule_type": "remote",
     "experience_type": "between1And3",
+    "experience_minimum_years": 2,
     "city": "2"
   }
 ]

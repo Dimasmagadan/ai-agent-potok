@@ -34,7 +34,7 @@ export POTOK_API_V2_BASE_URL=http://localhost:8765        # C07 reopen
 export POTOK_OPEN_BASE_URL=http://localhost:8765/open      # поток B
 export POTOK_CONSTRUCTOR_ID=1                               # поток B
 
-python3 scripts/talent_pool.py reserve                    # 14 кандидатов резерва
+python3 scripts/talent_pool.py reserve                    # 18 кандидатов резерва
 python3 scripts/talent_pool.py dedup                      # 2 пары дублей (phone, email)
 python3 scripts/talent_pool.py reserve > /tmp/reserve.json
 python3 scripts/talent_pool.py search '[{"term":"питон","kind":"original"},{"term":"python","kind":"synonym"}]' --reserve-file /tmp/reserve.json
@@ -45,9 +45,9 @@ python3 scripts/talent_pool.py search '[{"term":"fastapi","kind":"original"}]' -
 python3 scripts/job_seeker.py jobs-list
 python3 scripts/job_seeker.py jobs-match '{"terms":[{"term":"python","kind":"original"},{"term":"django","kind":"original"}],"filters":{"schedule":"remote"}}'
 
-python3 scripts/talent_pool.py reopen '{"target_job_id":202,"source_job_id":201,"source_represents_previous_criteria":true,"applicant_salary_currency":"RUR","context_terms":{"schedule":["remote","удалённо"]},"declination_reason_mapping":{"experience_minimum":[8],"salary":[12,19]}}'
+python3 scripts/talent_pool.py reopen '{"target_job_id":202,"source_job_id":201,"previous_criteria":{"salary_to":280000,"currency_type":"RUR","schedule_type":"fullDay","experience_minimum_years":3,"city":"1","role_terms":["python","backend"],"profile_terms_any":["django"]},"current_criteria":{"salary_to":350000,"currency_type":"RUR","schedule_type":"remote","experience_minimum_years":2,"city":"2","role_terms":["python","backend"],"profile_terms_any":["django","fastapi"]},"applicant_salary_currency":"RUR","context_terms":{"schedule":["удалённо"]},"declination_reason_mapping":{"experience_minimum":[8]}}'
 
-make test                                                  # 79 тестов ядра (stdlib unittest)
+make test                                                  # 100 тестов ядра (stdlib unittest)
 ```
 
 `reserve`, `search` и `dedup` возвращают уже собранную часть данных, если API
@@ -56,13 +56,16 @@ make test                                                  # 79 тестов я�
 полный отчёт по базе. `reopen` использует собственный, более строгий контракт
 частичных результатов (`status: partial|blocked` в JSON, см. ниже).
 
-Фикстуры — `fixtures/*.json` (обезличенные, придуманные данные): 18
-кандидатов (10 исходных + 8 для демонстрации `reopen`), 2 активных на
+Фикстуры — `fixtures/*.json` (обезличенные, придуманные данные): 22
+кандидата (14 базовых + 8 для демонстрации `reopen`), 2 активных на
 вакансии, 2 нанятых финалиста (в т.ч. один исключённый из резерва только
 `reopen`-сценарием), 1 финалист с отменённым наймом (возвращается в резерв),
 2 пары дублей, 2 кандидата с резюме (`.docx`, генерируется на лету) для
-демонстрации потока A, 3 открытые вакансии для потока B, архивная и текущая
-версия вакансии (201/202) с 8 прошлыми кандидатами для `reopen`.
+демонстрации потока A, 5 открытых вакансий для потока B (разработка, аналитика,
+DevOps, продажи), архивная и текущая версия вакансии (201/202) с 8 прошлыми
+кандидатами для `reopen`. Полный `reopen`-пример показывает разблокированные
+сигналы зарплаты, локации, нового профиля, подтверждённой причины отказа и
+контекста комментария, а также исключение уже нанятого и активного кандидатов.
 
 ## Команды
 

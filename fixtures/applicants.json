@@ -9,12 +9,16 @@
   {"id": 8, "name": "Никита Фомин", "email": "nikita.fomin@example.com", "phones": ["79161110008"], "title": "Junior Frontend developer", "tags": ["react"]},
   {"id": 9, "name": "Светлана Орлова", "email": "svetlana.orlova@example.com", "phones": ["79161110009"], "title": "DevOps engineer", "tags": ["docker", "kubernetes"]},
   {"id": 10, "name": "Павел Гришин", "email": "pavel.grishin@example.com", "phones": ["79161110010"], "title": "HR manager", "tags": ["recruiting"]},
+  {"id": 11, "name": "Андрей Крылов", "email": "andrey.krylov@example.com", "phones": ["79161110011"], "title": "Product manager", "tags": ["b2b", "discovery", "roadmap"]},
+  {"id": 12, "name": "Татьяна Лебедева", "email": "tatyana.lebedeva@example.com", "phones": ["79161110012"], "title": "Медицинская сестра", "tags": ["сестринское дело", "стационар"]},
+  {"id": 13, "name": "Роман Денисов", "email": "roman.denisov@example.com", "phones": ["79161110013"], "title": "B2B Sales Manager", "tags": ["business development", "хантер"]},
+  {"id": 14, "name": "Антон Кравцов", "email": null, "phones": [], "title": "C++ developer", "tags": ["qt", "embedded"]},
   {"id": 21, "name": "Мария Волкова", "email": "maria.volkova@example.com", "phones": ["79161110021"], "title": "Python developer", "tags": ["python", "backend"], "salary": 320000, "city": {"id": "1", "name": "Москва"}},
   {"id": 22, "name": "Ирина Попова", "email": "irina.popova@example.com", "phones": ["79161110022"], "title": "QA инженер", "tags": ["manual"], "city": {"id": "2", "name": "Санкт-Петербург"}},
   {"id": 23, "name": "Сергей Титов", "email": "sergey.titov@example.com", "phones": ["79161110023"], "title": "Python developer", "tags": ["python", "backend", "fastapi"]},
   {"id": 24, "name": "Алексей Панов", "email": "alexey.panov@example.com", "phones": ["79161110024"], "title": "Офис-менеджер", "tags": ["excel"]},
   {"id": 25, "name": "Наталья Белова", "email": "natalia.belova@example.com", "phones": ["79161110025"], "title": "Support", "tags": []},
-  {"id": 26, "name": "Виктор Ершов", "email": "viktor.ershov@example.com", "phones": ["79161110026"], "title": "Складской работник", "tags": ["excel"]},
+  {"id": 26, "name": "Виктор Ершов", "email": "viktor.ershov@example.com", "phones": ["79161110026"], "title": "Складской работник", "tags": ["excel"], "city": {"id": "2", "name": "Санкт-Петербург"}},
   {"id": 27, "name": "Ольга Кузнецова", "email": "olga.kuznetsova@example.com", "phones": ["79161110027"], "title": "Python developer", "tags": ["python", "backend"], "salary": 999999, "city": {"id": "1", "name": "Москва"}},
   {"id": 28, "name": "Дарья Смирнова", "email": "darya.smirnova@example.com", "phones": ["79161110028"], "title": "Python developer", "tags": ["python", "backend"], "salary": 330000, "city": {"id": "2", "name": "Санкт-Петербург"}}
 ]
