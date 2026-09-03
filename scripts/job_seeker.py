@@ -53,7 +53,7 @@ def _parse_open_job(raw, open_base_url):
 
 
 def fetch_jobs_constructor(open_base_url, constructor_id):
-    raw = tp._request(f"/constructor/{constructor_id}", base=open_base_url)
+    raw = tp._request(f"/constructor/{constructor_id}", base=open_base_url, authenticated=False)
     jobs_raw = raw.get("jobs") if isinstance(raw, dict) else raw
     return [_parse_open_job(j, open_base_url) for j in (jobs_raw or [])]
 
@@ -65,9 +65,8 @@ def fetch_jobs_v3_fallback(open_base_url):
     используется best-effort ключ 'career_site_published', отсутствие которого
     трактуется как «опубликована» (не отфильтровывать вслепую).
     """
-    raw = tp._request("/jobs.json", {"by_scope": "all"})
     jobs = []
-    for j in raw.get("data", []):
+    for j in tp._paginate_page("/jobs.json", {"by_scope": "all"}):
         if j.get("career_site_published") is False:
             continue
         jobs.append(
@@ -121,6 +120,29 @@ def _score_job(job, terms):
                 evidence.append({"source": field, "term": term, "kind": kind, "quote": tp._find_quote(text, term)})
                 break
     return total, evidence
+
+
+def validate_profile(profile):
+    if not isinstance(profile, dict) or set(profile) - {"terms", "filters"}:
+        return False
+    terms = profile.get("terms")
+    filters = profile.get("filters", {})
+    if not isinstance(terms, list) or not isinstance(filters, dict):
+        return False
+    if set(filters) - {"city", "schedule", "salary_from"}:
+        return False
+    for term in terms:
+        if not isinstance(term, dict) or set(term) != {"term", "kind"}:
+            return False
+        if not isinstance(term["term"], str) or not term["term"].strip() or term["kind"] not in {"original", "synonym"}:
+            return False
+    if "city" in filters and (not isinstance(filters["city"], str) or not filters["city"].strip()):
+        return False
+    if "schedule" in filters and (not isinstance(filters["schedule"], str) or not filters["schedule"].strip()):
+        return False
+    if "salary_from" in filters and (isinstance(filters["salary_from"], bool) or not isinstance(filters["salary_from"], (int, float))):
+        return False
+    return True
 
 
 def match_jobs(jobs, profile, top=10):
@@ -182,6 +204,8 @@ def main():
             print(json.dumps({"source": "constructor", "jobs": jobs}, ensure_ascii=False, indent=2))
     elif args.cmd == "jobs-match":
         profile = json.loads(args.profile_json)
+        if not validate_profile(profile):
+            sys.exit("PROFILE_JSON имеет неверную структуру")
         if args.jobs_file:
             with open(args.jobs_file, encoding="utf-8") as f:
                 jobs = json.load(f)

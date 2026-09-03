@@ -73,7 +73,9 @@ def extract_profile(user_text, api_key):
     if resp.get("stop_reason") == "refusal":
         return None, "refusal"
     try:
-        return extract_json_object(_text_of(resp)), None
+        profile = extract_json_object(_text_of(resp))
+        if js.validate_profile(profile):
+            return profile, None
     except ValueError:
         pass
 
@@ -83,9 +85,12 @@ def extract_profile(user_text, api_key):
     if resp2.get("stop_reason") == "refusal":
         return None, "refusal"
     try:
-        return extract_json_object(_text_of(resp2)), None
+        profile = extract_json_object(_text_of(resp2))
+        if js.validate_profile(profile):
+            return profile, None
     except ValueError:
-        return None, "parse_failed"
+        pass
+    return None, "parse_failed"
 
 
 def is_rate_limited(last_ts_map, chat_id, now):

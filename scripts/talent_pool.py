@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 BASE_URL = os.environ.get("POTOK_BASE_URL", "").rstrip("/")
 TOKEN = os.environ.get("POTOK_API_TOKEN", "")
@@ -38,11 +38,12 @@ def _retry_delay(error, attempt):
     return 2**attempt
 
 
-def _request(path, params=None, base=None):
+def _request(path, params=None, base=None, authenticated=True):
     url = f"{base if base is not None else BASE_URL}{path}"
     if params:
         url += "?" + urlencode(params, doseq=True)
-    req = Request(url, headers={"Authorization": f"Bearer {TOKEN}"})
+    headers = {"Authorization": f"Bearer {TOKEN}"} if authenticated else {}
+    req = Request(url, headers=headers)
     for attempt in range(4):
         try:
             with urlopen(req, timeout=30) as resp:
@@ -171,7 +172,13 @@ def _term_matches(term, haystack_tokens):
 # ---------------------------------------------------------------------------
 
 MAX_CV_BYTES = 10 * 1024 * 1024
+MAX_DOCX_XML_BYTES = 10 * 1024 * 1024
 CV_STATUSES = {"ok", "no_cv", "download_failed", "too_large", "extract_failed", "unsupported_format"}
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def _cv_record(applicant_id, source_url, status, fmt, text):
@@ -191,9 +198,10 @@ def _download_cv(url):
     if parts.scheme != "https" and not (parts.scheme == "http" and is_local):
         return None, "download_failed"
 
-    def _try(headers):
+    def _try(headers, allow_redirects=True):
         req = Request(url, headers=headers)
-        with urlopen(req, timeout=30) as resp:
+        opener = urlopen if allow_redirects else build_opener(_NoRedirect()).open
+        with opener(req, timeout=30) as resp:
             data = bytearray()
             while True:
                 chunk = resp.read(65536)
@@ -210,7 +218,8 @@ def _download_cv(url):
         if e.code in (401, 403):
             e.close()
             try:
-                return _try({"Authorization": f"Bearer {TOKEN}"})
+                # Never forward the tenant token to a redirect target.
+                return _try({"Authorization": f"Bearer {TOKEN}"}, allow_redirects=False)
             except (HTTPError, URLError, TimeoutError):
                 return None, "download_failed"
         e.close()
@@ -221,6 +230,9 @@ def _download_cv(url):
 
 def _extract_docx_text(data):
     with zipfile.ZipFile(io.BytesIO(data)) as z:
+        info = z.getinfo("word/document.xml")
+        if info.file_size > MAX_DOCX_XML_BYTES:
+            raise ValueError("DOCX document.xml is too large")
         xml_bytes = z.read("word/document.xml")
     root = ET.fromstring(xml_bytes)
     lines = []
@@ -253,7 +265,7 @@ def _extract_cv_text(data, ext):
     if ext == ".docx":
         try:
             return _normalize_cv_text(_extract_docx_text(data)), "docx", None
-        except (zipfile.BadZipFile, KeyError, ET.ParseError):
+        except (ValueError, zipfile.BadZipFile, KeyError, ET.ParseError):
             return "", "docx", "extract_failed"
     if ext == ".txt":
         return _normalize_cv_text(_extract_txt(data)), "txt", None
@@ -490,7 +502,7 @@ def _criteria_from_job(job):
     if not job:
         return {}
     raw = {}
-    for k in ("salary_to", "currency_type", "schedule_type", "experience_type", "city"):
+    for k in ("salary_to", "currency_type", "schedule_type", "experience_minimum_years", "experience_type", "city"):
         if job.get(k) is not None:
             raw[k] = job[k]
     return raw
@@ -667,14 +679,16 @@ def _fetch_cursor_lenient(path, required_fields, params=None, base=None):
 
 def _fetch_job(job_id):
     try:
-        return _request(f"/jobs/{job_id}.json"), True
+        job = _request(f"/jobs/{job_id}.json")
+        return (job, True) if isinstance(job, dict) else (None, False)
     except FetchError:
         return None, False
 
 
 def _fetch_applicant(applicant_id):
     try:
-        return _request(f"/applicants/{applicant_id}.json"), True
+        applicant = _request(f"/applicants/{applicant_id}.json")
+        return (applicant, True) if isinstance(applicant, dict) else (None, False)
     except FetchError:
         return None, False
 
@@ -701,10 +715,18 @@ def _fetch_comments_for(applicant_id, source_job_id):
             body = _request("/events.json", params, base=base)
         except FetchError:
             return None
-        for ev in body.get("data", []):
+        if not isinstance(body, dict) or not isinstance(body.get("data"), list) or not isinstance(body.get("pages"), int):
+            return None
+        if body["pages"] < params["page"]:
+            return None
+        for ev in body["data"]:
+            if not isinstance(ev, dict):
+                return None
             if ev.get("type") == "Event::Comment" and ev.get("job_id") == source_job_id:
+                if not all(k in ev for k in ("id", "body", "created_at")):
+                    return None
                 comments.append(ev)
-        if params["page"] >= body.get("pages", 1):
+        if params["page"] >= body["pages"]:
             return comments
         params["page"] += 1
 
@@ -811,7 +833,7 @@ def _signal_decline_reason(criteria, applicant, mapping, reasons_dict, changes):
             continue
         if cat in ("salary", "experience_minimum", "profile"):
             ids = [c if isinstance(c, int) else c.get("reason_id") for c in cfg]
-            if reason_id in ids:
+            if reason_id in ids and (cat != "profile" or _signal_new_terms(criteria, applicant)):
                 matched.append(cat)
         else:
             field = _CATEGORY_FIELD[cat]
@@ -836,6 +858,25 @@ def _signal_decline_reason(criteria, applicant, mapping, reasons_dict, changes):
     return {"type": "decline_reason_matches_change", "weight": 3, "confidence": "high", "evidence": evidence}
 
 
+def _is_controlled_context_term(criteria, applicant, category, term):
+    key = _normalize_term_key(term)
+    if not key:
+        return False
+    if category == "profile":
+        return key in criteria["added_profile_terms_keys"]
+    if key in {"salary", "experience", "city", "location", "schedule", "graph", "график", "зарплата", "опыт", "город"}:
+        return False
+    values = [criteria["previous"].get(_CATEGORY_FIELD[category]), criteria["current"].get(_CATEGORY_FIELD[category])]
+    if category == "salary":
+        values.append(applicant.get("salary"))
+    normalized_values = {_normalize_term_key(str(value)) for value in values if value is not None}
+    if key in normalized_values:
+        return True
+    if category == "schedule" and criteria["current"].get("schedule_type") == "remote":
+        return key in {"удаленно", "удалённо"}
+    return False
+
+
 def _signal_context(criteria, applicant, context_terms, comments, changes):
     if not context_terms:
         return None
@@ -844,9 +885,8 @@ def _signal_context(criteria, applicant, context_terms, comments, changes):
         terms = context_terms.get(cat)
         if not terms or not changes.get(cat):
             continue
-        allowed_keys = criteria["added_profile_terms_keys"] if cat == "profile" else None
         for term in terms:
-            if allowed_keys is not None and _normalize_term_key(term) not in allowed_keys:
+            if not _is_controlled_context_term(criteria, applicant, cat, term):
                 continue
             for tag in applicant.get("tags") or []:
                 if _normalize_term_key(term) == _normalize_term_key(tag):

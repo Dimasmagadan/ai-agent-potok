@@ -4,6 +4,7 @@
 Запуск: python3 scripts/test_job_seeker.py
 """
 import unittest
+from unittest.mock import patch
 
 import job_seeker as js
 
@@ -42,6 +43,17 @@ class ParseOpenJobTests(unittest.TestCase):
         self.assertIsNone(job["city"])
         self.assertIsNone(job["salary_from"])
         self.assertIsNone(job["description"])
+
+    def test_constructor_fetch_is_unauthenticated(self):
+        with patch.object(js.tp, "_request", return_value=[]) as request:
+            js.fetch_jobs_constructor("https://careers.example", "1")
+        self.assertFalse(request.call_args.kwargs["authenticated"])
+
+    def test_v3_fallback_paginates(self):
+        rows = [{"id": 1, "name": "One"}, {"id": 2, "name": "Two"}]
+        with patch.object(js.tp, "_paginate_page", return_value=iter(rows)):
+            jobs = js.fetch_jobs_v3_fallback("https://careers.example")
+        self.assertEqual([job["id"] for job in jobs], [1, 2])
 
 
 class FilterTests(unittest.TestCase):
@@ -114,6 +126,15 @@ class MatchJobsTests(unittest.TestCase):
         profile = {"terms": [{"term": "golang", "kind": "original"}], "filters": {}}
         result = js.match_jobs(self.JOBS, profile)
         self.assertEqual(result["jobs"], [])
+
+
+class ProfileValidationTests(unittest.TestCase):
+    def test_valid_profile(self):
+        self.assertTrue(js.validate_profile({"terms": [{"term": "python", "kind": "original"}], "filters": {"city": "Москва"}}))
+
+    def test_rejects_invalid_term_and_filter_types(self):
+        self.assertFalse(js.validate_profile({"terms": "python", "filters": {}}))
+        self.assertFalse(js.validate_profile({"terms": [{"term": "python", "kind": "original"}], "filters": {"city": 1}}))
 
 
 if __name__ == "__main__":

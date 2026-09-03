@@ -5,6 +5,7 @@
 Запуск: python3 scripts/test_tg_bot.py
 """
 import unittest
+from unittest.mock import patch
 
 import tg_bot as bot
 
@@ -25,6 +26,13 @@ class ExtractJsonObjectTests(unittest.TestCase):
     def test_no_braces_raises_value_error(self):
         with self.assertRaises(ValueError):
             bot.extract_json_object("")
+
+    def test_invalid_llm_profile_is_parse_failed(self):
+        response = {"content": [{"type": "text", "text": '{"terms":"python","filters":{}}'}]}
+        with patch.object(bot, "call_llm_messages", return_value=response):
+            profile, error = bot.extract_profile("python", "key")
+        self.assertIsNone(profile)
+        self.assertEqual(error, "parse_failed")
 
 
 class RateLimitTests(unittest.TestCase):

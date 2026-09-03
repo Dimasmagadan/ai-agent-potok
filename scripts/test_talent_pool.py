@@ -201,6 +201,11 @@ class CvExtractionTests(unittest.TestCase):
         text, fmt, err = tp._extract_cv_text(b"data", ".rtf")
         self.assertEqual(err, "unsupported_format")
 
+    def test_docx_with_oversized_uncompressed_xml_is_rejected(self):
+        with patch.object(tp, "MAX_DOCX_XML_BYTES", 1):
+            text, fmt, err = tp._extract_cv_text(_build_docx_bytes(["Python"]), ".docx")
+        self.assertEqual((text, fmt, err), ("", "docx", "extract_failed"))
+
 
 class CvIndexTests(unittest.TestCase):
     def _reserve(self):
@@ -360,6 +365,20 @@ class ReopenSignalTests(unittest.TestCase):
         self.assertIsNone(tp._signal_context(criteria, applicant, {"schedule": ["опыт"]}, comments, changes))
         signal = tp._signal_context(criteria, applicant, {"schedule": ["удалённо"]}, comments, changes)
         self.assertEqual(signal["type"], "context_mentions_change")
+
+    def test_profile_decline_reason_requires_added_profile_match(self):
+        criteria = self._criteria(
+            {"role_terms": ["python"], "profile_terms_any": ["django"]},
+            {"role_terms": ["python"], "profile_terms_any": ["django", "fastapi"]},
+        )
+        changes = tp._detect_directional_changes(criteria)
+        mapping, reasons = {"profile": [44]}, {44: "Нет FastAPI"}
+        self.assertIsNone(tp._signal_decline_reason(criteria, {"declination_reason_id": 44, "tags": ["python"]}, mapping, reasons, changes))
+        self.assertIsNotNone(tp._signal_decline_reason(criteria, {"declination_reason_id": 44, "tags": ["python", "fastapi"]}, mapping, reasons, changes))
+
+    def test_job_criteria_preserve_exact_experience_minimum(self):
+        criteria = tp._criteria_from_job({"experience_minimum_years": 2, "experience_type": "moreThan6"})
+        self.assertEqual(tp._normalize_criteria(criteria)["experience_minimum_years"], 2)
 
     def test_score_bonus_only_with_signal_and_full_role_match(self):
         criteria = self._criteria({"salary_to": 100}, {"salary_to": 200, "role_terms": ["python"]})
