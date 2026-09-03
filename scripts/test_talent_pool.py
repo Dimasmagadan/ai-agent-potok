@@ -169,6 +169,60 @@ def _build_docx_bytes(lines):
     return buf.getvalue()
 
 
+class DownloadCvTests(unittest.TestCase):
+    def test_public_attempt_sends_no_authorization_header(self):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.side_effect = [b"pdf-bytes", b""]
+        captured = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured["headers"] = dict(req.header_items())
+            return response
+
+        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", fake_urlopen):
+            data, err = tp._download_cv("https://example.test/cv/1.pdf")
+        self.assertEqual((data, err), (b"pdf-bytes", None))
+        self.assertNotIn("Authorization", captured["headers"])
+
+    def test_401_retry_uses_no_redirect_opener_with_token(self):
+        headers = Message()
+        unauthorized = HTTPError("https://example.test/cv/1.pdf", 401, "Unauthorized", headers, BytesIO())
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.side_effect = [b"pdf-bytes", b""]
+        captured = {}
+
+        def fake_open(req, timeout=None):
+            captured["headers"] = dict(req.header_items())
+            return response
+
+        fake_opener = MagicMock()
+        fake_opener.open = fake_open
+
+        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", side_effect=unauthorized), patch.object(
+            tp, "build_opener", return_value=fake_opener
+        ) as build_opener_mock:
+            data, err = tp._download_cv("https://example.test/cv/1.pdf")
+
+        self.assertEqual((data, err), (b"pdf-bytes", None))
+        self.assertEqual(captured["headers"].get("Authorization"), "Bearer secret-token")
+        # ensures the retry goes through a redirect-refusing opener, not urlopen directly
+        self.assertTrue(build_opener_mock.called)
+        self.assertIsInstance(build_opener_mock.call_args.args[0], tp._NoRedirect)
+
+    def test_401_then_redirect_response_fails_without_leaking_token_further(self):
+        headers = Message()
+        unauthorized = HTTPError("https://example.test/cv/1.pdf", 401, "Unauthorized", headers, BytesIO())
+        redirected = HTTPError("https://example.test/cv/1.pdf", 302, "Found", headers, BytesIO())
+
+        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", side_effect=unauthorized), patch.object(
+            tp, "build_opener", return_value=MagicMock(open=MagicMock(side_effect=redirected))
+        ):
+            data, err = tp._download_cv("https://example.test/cv/1.pdf")
+        self.assertEqual((data, err), (None, "download_failed"))
+
+
 class CvExtractionTests(unittest.TestCase):
     def test_docx_paragraphs_joined_by_newline(self):
         data = _build_docx_bytes(["Опыт: Python, Django", "FastAPI, PostgreSQL"])
@@ -299,6 +353,34 @@ class ReopenValidationTests(unittest.TestCase):
                 target_job=None,
                 source_job=None,
             )
+
+    def test_mapping_none_and_empty_are_accepted(self):
+        tp._validate_mapping(None)
+        tp._validate_mapping({})
+
+    def test_mapping_must_be_object(self):
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_mapping(["salary"])
+
+    def test_mapping_category_must_be_list(self):
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_mapping({"salary": 5})
+
+    def test_mapping_item_must_be_int_or_dict_with_int_reason_id(self):
+        tp._validate_mapping({"salary": [5, {"reason_id": 6}]})
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_mapping({"salary": ["not-a-reason"]})
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_mapping({"location": [{"reason_id": "not-an-int", "from": "1", "to": "2"}]})
+
+    def test_unknown_top_level_keys_are_ignored(self):
+        tp._validate_mapping({"unrelated": "anything"})
+
+    def test_run_reopen_rejects_malformed_mapping_as_blocked_request(self):
+        result, exit_code = tp.run_reopen({"target_job_id": 1, "source_job_id": 2}, mapping={"salary": ["bad"]})
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["warnings"][0]["code"], "VALIDATION_ERROR")
 
 
 class ReopenSignalTests(unittest.TestCase):

@@ -109,8 +109,11 @@ def _tool_reopen(args):
 
 
 def _tool_jobs_match(args):
+    profile = args["profile"]
+    if not js.validate_profile(profile):
+        raise ValueError("Некорректный profile: см. описание схемы potok_jobs_match")
     jobs = js.fetch_jobs_constructor(js.OPEN_BASE_URL, js.CONSTRUCTOR_ID)
-    return js.match_jobs(jobs, args["profile"])
+    return js.match_jobs(jobs, profile)
 
 
 TOOL_HANDLERS = {

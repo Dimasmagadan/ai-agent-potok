@@ -942,9 +942,28 @@ def _blocked_result(warnings):
     }
 
 
+def _validate_mapping(mapping):
+    if mapping is None:
+        return
+    if not isinstance(mapping, dict):
+        raise ReopenValidationError("VALIDATION_ERROR", "declination_reason_mapping должен быть объектом")
+    for cat, cfg in mapping.items():
+        if cat not in CONTEXT_CATEGORIES:
+            continue
+        if not isinstance(cfg, list):
+            raise ReopenValidationError("VALIDATION_ERROR", f"declination_reason_mapping.{cat} должен быть списком")
+        for item in cfg:
+            if isinstance(item, bool) or (
+                not isinstance(item, int)
+                and not (isinstance(item, dict) and isinstance(item.get("reason_id"), int) and not isinstance(item.get("reason_id"), bool))
+            ):
+                raise ReopenValidationError("VALIDATION_ERROR", f"declination_reason_mapping.{cat} содержит некорректный элемент")
+
+
 def run_reopen(request, mapping=None, top=20):
     warnings = []
     try:
+        _validate_mapping(mapping)
         prep = _validate_request(request)
         target_job_id, source_job_id = prep["target_job_id"], prep["source_job_id"]
 

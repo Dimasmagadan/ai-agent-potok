@@ -6,6 +6,7 @@
 import unittest
 from unittest.mock import patch
 
+import job_seeker as js
 import mcp_server as srv
 import talent_pool as tp
 
@@ -55,6 +56,21 @@ class ToolCallTests(unittest.TestCase):
     def test_reopen_validation_error_is_error_true(self):
         resp = srv.handle_message({"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "potok_reopen", "arguments": {"request": {}}}})
         self.assertTrue(resp["result"]["isError"])
+
+    def test_jobs_match_invalid_profile_is_error_true_without_hitting_network(self):
+        with patch.object(js, "fetch_jobs_constructor", side_effect=AssertionError("should not be called")):
+            resp = srv.handle_message(
+                {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "potok_jobs_match", "arguments": {"profile": {"terms": "not-a-list"}}}}
+            )
+        self.assertTrue(resp["result"]["isError"])
+
+    def test_jobs_match_valid_profile_calls_match_jobs(self):
+        with patch.object(js, "fetch_jobs_constructor", return_value=[{"id": 1}]), patch.object(js, "match_jobs", return_value=[{"job_id": 1}]) as match_jobs:
+            resp = srv.handle_message(
+                {"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "potok_jobs_match", "arguments": {"profile": {"terms": []}}}}
+            )
+        self.assertFalse(resp["result"]["isError"])
+        self.assertTrue(match_jobs.called)
 
 
 if __name__ == "__main__":
