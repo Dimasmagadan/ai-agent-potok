@@ -1,0 +1,5 @@
+[
+  {"id": 8, "name": "Не хватает опыта", "initiator": "from_recruiter", "archived": false},
+  {"id": 12, "name": "Ожидания по зарплате", "initiator": "from_applicant", "archived": false},
+  {"id": 19, "name": "Не устроила вилка", "initiator": "from_applicant", "archived": false}
+]

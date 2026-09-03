@@ -1,0 +1,31 @@
+{
+  "jobs": [
+    {
+      "id": 42,
+      "name": "Python Backend Developer",
+      "department": {"name": "Разработка"},
+      "city": {"name": "Москва"},
+      "salary": {"from": 280000, "to": 350000, "currency": "RUR"},
+      "schedule_type": "remote",
+      "description": "<p>Ищем бэкенд-разработчика на <b>Python</b>. Опыт с Django и FastAPI приветствуется.</p>"
+    },
+    {
+      "id": 43,
+      "name": "Frontend Developer",
+      "department": {"name": "Разработка"},
+      "city": {"name": "Санкт-Петербург"},
+      "salary": {"from": 150000, "to": 220000, "currency": "RUR"},
+      "schedule_type": "fullDay",
+      "description": "<p>React, TypeScript. Работа в офисе.</p>"
+    },
+    {
+      "id": 44,
+      "name": "Data Analyst",
+      "department": {"name": "Аналитика"},
+      "city": null,
+      "salary": {"from": 130000, "to": null, "currency": "RUR"},
+      "schedule_type": "remote",
+      "description": "<p>SQL, Python, дашборды.</p>"
+    }
+  ]
+}

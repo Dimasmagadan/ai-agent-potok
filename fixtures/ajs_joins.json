@@ -2,5 +2,18 @@
   "101": [
     {"id": 1001, "job_id": 101, "applicant_id": 1, "active": true}
   ],
-  "102": []
+  "102": [],
+  "201": [
+    {"id": 2001, "job_id": 201, "applicant_id": 21, "active": false, "declined_at": "2026-06-01T10:00:00.000Z", "declination_reason_id": null},
+    {"id": 2002, "job_id": 201, "applicant_id": 22, "active": false, "declined_at": "2026-06-02T10:00:00.000Z", "declination_reason_id": null},
+    {"id": 2003, "job_id": 201, "applicant_id": 23, "active": false, "declined_at": "2026-06-03T10:00:00.000Z", "declination_reason_id": null},
+    {"id": 2004, "job_id": 201, "applicant_id": 24, "active": false, "declined_at": "2026-06-04T10:00:00.000Z", "declination_reason_id": 8},
+    {"id": 2005, "job_id": 201, "applicant_id": 25, "active": false, "declined_at": "2026-06-05T10:00:00.000Z", "declination_reason_id": null},
+    {"id": 2006, "job_id": 201, "applicant_id": 26, "active": false, "declined_at": "2026-06-06T10:00:00.000Z", "declination_reason_id": null},
+    {"id": 2007, "job_id": 201, "applicant_id": 27, "active": false, "declined_at": "2026-06-07T10:00:00.000Z", "declination_reason_id": null},
+    {"id": 2008, "job_id": 201, "applicant_id": 28, "active": false, "declined_at": "2026-06-08T10:00:00.000Z", "declination_reason_id": null}
+  ],
+  "202": [
+    {"id": 2101, "job_id": 202, "applicant_id": 28, "active": true}
+  ]
 }

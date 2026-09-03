@@ -1,4 +1,22 @@
 [
   {"id": 101, "name": "Backend-разработчик (Java)"},
-  {"id": 102, "name": "Frontend-разработчик (React)"}
+  {"id": 102, "name": "Frontend-разработчик (React)"},
+  {
+    "id": 201,
+    "name": "Python Backend Developer (архивная версия)",
+    "salary_to": 280000,
+    "currency_type": "RUR",
+    "schedule_type": "fullDay",
+    "experience_type": "between3And6",
+    "city": "1"
+  },
+  {
+    "id": 202,
+    "name": "Python Backend Developer",
+    "salary_to": 350000,
+    "currency_type": "RUR",
+    "schedule_type": "remote",
+    "experience_type": "between1And3",
+    "city": "2"
+  }
 ]
