@@ -69,7 +69,7 @@ TOOLS = [
                     "Если кандидатов нужно брать из той же вакансии, укажите use_target_as_source:true и явные previous_criteria.",
                     "properties": {
                         "target_job_id": {"type": "integer", "minimum": 1, "description": "ID целевой вакансии с новыми условиями."},
-                        "target_job_description": {"type": "string", "pattern": ".*\\S.*", "description": "Описание целевой вакансии, только если её ID неизвестен; требует current_criteria."},
+                        "target_job_description": {"type": "string", "pattern": ".*\\S.*", "description": "Описание целевой вакансии, только если её ID неизвестен. Инструмент НЕ разбирает свободный текст: извлеки значения сам и передай их явно в current_criteria, показав их рекрутёру для подтверждения до вызова."},
                         "source_job_id": {"type": "integer", "minimum": 1, "description": "ID вакансии, из которой взять прошлых кандидатов."},
                         "use_target_as_source": {"type": "boolean", "description": "true, если прошлых кандидатов нужно брать из target_job_id."},
                         "source_represents_previous_criteria": {"type": "boolean", "description": "true, только если прежние условия берутся из source_job_id, без previous_criteria."},

@@ -480,6 +480,50 @@ class ReopenValidationTests(unittest.TestCase):
         self.assertEqual(result["warnings"][0]["code"], "VALIDATION_ERROR")
 
 
+class ReopenSchemaParityTests(unittest.TestCase):
+    """Один тест на каждое правило `allOf` в inputSchema поток_reopen (mcp_server.py),
+    чтобы runtime-валидация в _validate_request не разошлась со схемой молча."""
+
+    def test_rule0_target_id_xor_description(self):
+        base = {"source_job_id": 2, "previous_criteria": {"salary_to": 100}}
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request(dict(base))  # ни target_job_id, ни target_job_description
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request(dict(base, target_job_id=1, target_job_description="Python", current_criteria={"salary_to": 200}))  # оба
+        tp._validate_request(dict(base, target_job_id=1))
+        tp._validate_request(dict(base, target_job_description="Python", current_criteria={"salary_to": 200}))
+
+    def test_rule1_source_id_xor_use_target_as_source(self):
+        base = {"target_job_id": 1, "previous_criteria": {"salary_to": 100}}
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request(dict(base))  # ни source_job_id, ни use_target_as_source
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request(dict(base, source_job_id=1, use_target_as_source=True))  # оба
+        tp._validate_request(dict(base, source_job_id=2))
+        tp._validate_request(dict(base, use_target_as_source=True))
+
+    def test_rule2_previous_criteria_xor_represents_flag(self):
+        base = {"target_job_id": 1, "source_job_id": 2}
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request(dict(base))  # ни previous_criteria, ни флаг
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request(dict(base, previous_criteria={"salary_to": 100}, source_represents_previous_criteria=True))  # оба
+        tp._validate_request(dict(base, previous_criteria={"salary_to": 100}))
+        tp._validate_request(dict(base, source_represents_previous_criteria=True))
+
+    def test_rule3_use_target_as_source_requires_target_job_id(self):
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request(
+                {"target_job_description": "Python", "use_target_as_source": True, "current_criteria": {"salary_to": 200}, "previous_criteria": {"salary_to": 100}}
+            )
+        tp._validate_request({"target_job_id": 1, "use_target_as_source": True, "previous_criteria": {"salary_to": 100}})
+
+    def test_rule4_missing_target_job_id_requires_current_criteria(self):
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request({"target_job_description": "Python", "source_job_id": 2, "previous_criteria": {"salary_to": 100}})
+        tp._validate_request({"target_job_description": "Python", "source_job_id": 2, "previous_criteria": {"salary_to": 100}, "current_criteria": {"salary_to": 200}})
+
+
 class ReopenSignalTests(unittest.TestCase):
     def _criteria(self, prev_raw, curr_raw):
         prev = tp._normalize_criteria(prev_raw)

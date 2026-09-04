@@ -505,7 +505,7 @@ anthropic-beta: server-side-fallback-2026-07-01
 
 ## 12. Критерии приёмки
 
-Проверено 2026-09-03: `make test` (155/155), `make demo` и ручной stdio-прогон
+Проверено 2026-09-03: `make test` (160/160), `make demo` и ручной stdio-прогон
 MCP против mock-сервера проходят.
 
 - [x] `reserve`, `search` (без новых опций), `dedup` и все существующие тесты
