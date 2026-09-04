@@ -707,6 +707,22 @@ section {
   color: var(--muted);
 }
 
+.quickstart-explain {
+  margin: 14px 0 0;
+  padding-left: 19px;
+}
+
+.quickstart-explain li {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.quickstart-explain code {
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .command-block {
   padding: 20px;
   border: 1px solid var(--ink);
@@ -776,6 +792,41 @@ footer a {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+@property --neon-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.neon-border {
+  position: relative;
+}
+
+.neon-border::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  padding: 2px;
+  background: conic-gradient(from var(--neon-angle), transparent 0%, transparent 70%, var(--orange) 78%, var(--blue) 86%, transparent 94%, transparent 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  filter: blur(1.5px);
+  opacity: 0;
+  animation: neon-spin 4s linear infinite paused;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.neon-border:hover::after, .neon-border:focus-within::after {
+  opacity: 1;
+  animation-play-state: running;
+}
+
+@keyframes neon-spin {
+  to {
+    --neon-angle:360deg;
   }
 }
 @media (max-width: 899px) {
