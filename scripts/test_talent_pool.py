@@ -81,7 +81,10 @@ class SearchReserveTests(unittest.TestCase):
         res = tp.search_reserve(self.RESERVE, [{"term": "developer", "kind": "original"}, {"term": "django", "kind": "synonym"}])
         self.assertEqual([r["applicant_id"] for r in res], [2, 1])
         self.assertEqual([r["score"] for r in res], [2, 1])
-        self.assertEqual(len(tp.search_reserve(self.RESERVE, [], top_n=0)), 0)
+        with self.assertRaises(ValueError):
+            tp.search_reserve(self.RESERVE, [{"term": "developer", "kind": "original"}], top_n=0)
+        with self.assertRaises(ValueError):
+            tp.search_reserve(self.RESERVE, [])
 
 
 class ReservePoolTests(unittest.TestCase):
@@ -394,15 +397,48 @@ class ReopenValidationTests(unittest.TestCase):
         with self.assertRaises(tp.ReopenValidationError):
             tp._validate_request({"source_job_id": 1})
 
+    def test_description_target_requires_explicit_current_criteria(self):
+        request = {"target_job_description": "Python developer", "source_job_id": 2, "previous_criteria": {"salary_to": 100}}
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request(request)
+        tp._validate_request(dict(request, current_criteria={"salary_to": 200}))
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request(dict(request, target_job_id=1, current_criteria={"salary_to": 200}))
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request({"target_job_description": "Python", "use_target_as_source": True, "previous_criteria": {"salary_to": 100}, "current_criteria": {"salary_to": 200}})
+
+    def test_criteria_rejects_fractional_experience_and_negative_salary(self):
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request({"target_job_id": 1, "source_job_id": 2, "previous_criteria": {"salary_to": -1}})
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request({"target_job_id": 1, "source_job_id": 2, "previous_criteria": {"experience_minimum_years": 2.5}})
+
+    def test_criteria_null_is_unknown_but_invalid_experience_bucket_is_rejected(self):
+        tp._validate_request({"target_job_id": 1, "source_job_id": 2, "previous_criteria": {"salary_to": None}})
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request({"target_job_id": 1, "source_job_id": 2, "previous_criteria": None})
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request({"target_job_id": 1, "source_job_id": 2, "previous_criteria": {}})
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_request({"target_job_id": 1, "source_job_id": 2, "previous_criteria": {"experience_type": "bogus"}})
+
+    def test_applicant_url_template_requires_exact_http_placeholder(self):
+        base = {"target_job_id": 1, "source_job_id": 2, "previous_criteria": {"salary_to": 100}}
+        tp._validate_request(dict(base, applicant_url_template="https://company.test/applicants/{id}"))
+        for template in ("https://company.test/static", "ftp://company.test/{id}", "https://company.test/{id}/{id}", "https://company.test/{id}/{other}"):
+            with self.assertRaises(tp.ReopenValidationError):
+                tp._validate_request(dict(base, applicant_url_template=template))
+
     def test_same_source_and_target_requires_explicit_previous(self):
         with self.assertRaises(tp.ReopenValidationError):
             tp._validate_request({"target_job_id": 1, "source_job_id": 1})
         # does not raise once previous_criteria is explicit
         tp._validate_request({"target_job_id": 1, "source_job_id": 1, "previous_criteria": {"salary_to": 100}})
 
-    def test_use_target_as_source_conflicts_with_different_source_job_id(self):
-        with self.assertRaises(tp.ReopenValidationError):
-            tp._validate_request({"target_job_id": 1, "source_job_id": 2, "use_target_as_source": True})
+    def test_use_target_as_source_forbids_explicit_source_job_id(self):
+        for source_job_id in (1, 2):
+            with self.assertRaises(tp.ReopenValidationError):
+                tp._validate_request({"target_job_id": 1, "source_job_id": source_job_id, "use_target_as_source": True, "previous_criteria": {"salary_to": 100}})
 
     def test_explicit_previous_forbids_represents_flag(self):
         with self.assertRaises(tp.ReopenValidationError):
@@ -425,14 +461,17 @@ class ReopenValidationTests(unittest.TestCase):
             tp._validate_mapping({"salary": 5})
 
     def test_mapping_item_must_be_int_or_dict_with_int_reason_id(self):
-        tp._validate_mapping({"salary": [5, {"reason_id": 6}]})
+        tp._validate_mapping({"salary": [5], "schedule": [{"reason_id": 6, "from": "fullDay", "to": "remote"}]})
         with self.assertRaises(tp.ReopenValidationError):
             tp._validate_mapping({"salary": ["not-a-reason"]})
         with self.assertRaises(tp.ReopenValidationError):
             tp._validate_mapping({"location": [{"reason_id": "not-an-int", "from": "1", "to": "2"}]})
 
-    def test_unknown_top_level_keys_are_ignored(self):
-        tp._validate_mapping({"unrelated": "anything"})
+    def test_unknown_mapping_and_malformed_context_are_rejected(self):
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_mapping({"unrelated": "anything"})
+        with self.assertRaises(tp.ReopenValidationError):
+            tp._validate_context_terms({"schedule": "remote"})
 
     def test_run_reopen_rejects_malformed_mapping_as_blocked_request(self):
         result, exit_code = tp.run_reopen({"target_job_id": 1, "source_job_id": 2}, mapping={"salary": ["bad"]})

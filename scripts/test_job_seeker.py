@@ -29,6 +29,7 @@ class ParseOpenJobTests(unittest.TestCase):
             "salary": {"from": 280000, "to": 350000, "currency": "RUR"},
             "schedule_type": "remote",
             "description": "<p>Django</p>",
+            "key_skills": ["Django"],
         }
         job = js._parse_open_job(raw, "http://localhost:8765/open")
         self.assertEqual(job["title"], "Python Backend Developer")
@@ -36,6 +37,7 @@ class ParseOpenJobTests(unittest.TestCase):
         self.assertEqual(job["city"], "Москва")
         self.assertEqual(job["salary_to"], 350000)
         self.assertEqual(job["description"], "Django")
+        self.assertEqual(job["key_skills"], ["Django"])
         self.assertEqual(job["apply_url"], "http://localhost:8765/open/jobs/42")
 
     def test_missing_fields_are_null_not_empty(self):
@@ -170,6 +172,21 @@ class MatchJobsTests(unittest.TestCase):
         result = js.match_jobs(self.JOBS, profile)
         self.assertEqual(result["jobs"], [])
 
+    def test_filter_mismatch_is_kept_for_gap_reporting_when_requested(self):
+        profile = {"terms": [{"term": "python", "kind": "original"}], "filters": {"city": "Питер", "schedule": "remote", "salary_from": 400000}}
+        result = js.match_jobs(self.JOBS, profile, include_filter_mismatches=True)
+        self.assertEqual([job["id"] for job in result["jobs"]], [3])
+        self.assertEqual([job["id"] for job in result["near_matches"]], [1])
+        self.assertEqual(result["summary"]["matched"], 1)
+        self.assertEqual(result["summary"]["near_matches"], 1)
+
+    def test_near_match_does_not_displace_compatible_job_at_top_boundary(self):
+        jobs = [{"id": 1, "title": "Python Python", "city": "X"}, {"id": 2, "title": "Python", "city": "Y"}]
+        profile = {"terms": [{"term": "python", "kind": "original"}], "filters": {"city": "Y"}}
+        result = js.match_jobs(jobs, profile, top=1, include_filter_mismatches=True)
+        self.assertEqual([job["id"] for job in result["jobs"]], [2])
+        self.assertEqual(result["near_matches"], [])
+
     def test_internal_v3_resolution_keeps_unpublished_jobs(self):
         args = type("Args", (), {"jobs_file": None, "fallback_v3": True, "internal": True, "include_private": False})()
         with patch.object(js.tp, "BASE_URL", "https://api.example"), patch.object(js.tp, "TOKEN", "token"), patch.object(
@@ -241,10 +258,14 @@ class ComputeGapsTests(unittest.TestCase):
 class ProfileValidationTests(unittest.TestCase):
     def test_valid_profile(self):
         self.assertTrue(js.validate_profile({"terms": [{"term": "python", "kind": "original"}], "filters": {"city": "Москва"}}))
+        self.assertTrue(js.validate_profile({"terms": [], "filters": {}}))
+        self.assertFalse(js.validate_profile({"terms": [], "filters": {}}, require_terms=True))
 
     def test_rejects_invalid_term_and_filter_types(self):
         self.assertFalse(js.validate_profile({"terms": "python", "filters": {}}))
         self.assertFalse(js.validate_profile({"terms": [{"term": "python", "kind": "original"}], "filters": {"city": 1}}))
+        self.assertFalse(js.validate_profile({"terms": [{"term": "", "kind": "original"}]}))
+        self.assertFalse(js.validate_profile({"terms": [{"term": "python", "kind": "original"}], "filters": {"salary_from": -1}}))
 
 
 if __name__ == "__main__":

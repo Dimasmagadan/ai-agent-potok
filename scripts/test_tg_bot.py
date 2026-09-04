@@ -49,8 +49,25 @@ class ExtractJsonObjectTests(unittest.TestCase):
     def test_missing_target_job_is_none(self):
         response = {"content": [{"type": "text", "text": '{"terms": [], "filters": {}}'}]}
         with patch.object(bot, "call_llm_messages", return_value=response):
-            _, target_job, _ = bot.extract_profile("я питонист", "key")
+            profile, target_job, error = bot.extract_profile("я питонист", "key")
+        self.assertIsNone(profile)
         self.assertIsNone(target_job)
+        self.assertEqual(error, "parse_failed")
+
+    def test_target_only_followup_accepts_empty_terms(self):
+        response = {"content": [{"type": "text", "text": '{"terms": [], "filters": {}, "target_job": "9"}'}]}
+        with patch.object(bot, "MODE", "internal"), patch.object(bot, "call_llm_messages", return_value=response):
+            profile, target_job, error = bot.extract_profile("чего не хватает для вакансии 9", "key")
+        self.assertEqual(profile, {"terms": [], "filters": {}})
+        self.assertEqual(target_job, "9")
+        self.assertIsNone(error)
+
+    def test_external_mode_rejects_target_only_empty_profile(self):
+        response = {"content": [{"type": "text", "text": '{"terms": [], "filters": {}, "target_job": "9"}'}]}
+        with patch.object(bot, "MODE", "external"), patch.object(bot, "call_llm_messages", return_value=response):
+            profile, _, error = bot.extract_profile("вакансия 9", "key")
+        self.assertIsNone(profile)
+        self.assertEqual(error, "parse_failed")
 
 
 class MatchTargetJobTests(unittest.TestCase):
@@ -102,6 +119,31 @@ class FormatGapsPlainTests(unittest.TestCase):
         text = bot.format_gaps_plain(result)
         self.assertIn("вилка до 200000", text)
         self.assertIn("city", text)
+
+
+class FormatJobsPlainTests(unittest.TestCase):
+    def test_near_matches_listed_with_gap_reason(self):
+        result = {
+            "jobs": [{"id": 1, "title": "Python Dev", "apply_url": "u1"}],
+            "near_matches": [
+                {
+                    "id": 2,
+                    "title": "Python Dev Remote",
+                    "apply_url": "u2",
+                    "gaps": [{"field": "city", "job_value": "СПб", "profile_value": "Москва", "message": "вакансия в городе СПб, вы указали Москва"}],
+                }
+            ],
+        }
+        jobs_by_id = {1: {"city": "Москва"}, 2: {"city": "СПб"}}
+        text = bot.format_jobs_plain(result, jobs_by_id)
+        self.assertIn("Python Dev Remote", text)
+        self.assertIn("Почти подходят", text)
+        self.assertIn("вакансия в городе СПб", text)
+
+    def test_no_near_matches_omits_section(self):
+        result = {"jobs": [{"id": 1, "title": "Python Dev", "apply_url": "u1"}], "near_matches": []}
+        text = bot.format_jobs_plain(result, {1: {}})
+        self.assertNotIn("Почти подходят", text)
 
 
 class HandleUpdateInternalModeTests(unittest.TestCase):

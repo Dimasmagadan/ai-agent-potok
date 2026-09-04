@@ -265,7 +265,7 @@ python3 scripts/job_seeker.py jobs-match '<PROFILE_JSON>' [--jobs-file /tmp/jobs
    отбрасывается, а помечается `"filter_unknown": ["city"]` в выдаче.
 2. **Скоринг** - сумма по уникальным термам:
    вес = (терм найден в `title`: 3, иначе в `department`: 2, иначе в
-   `description`: 1) × (`kind == "original"`: 2, `synonym`: 1). Матчер - тот
+   `key_skills`: 1, иначе в `description`: 1) × (`kind == "original"`: 2, `synonym`: 1). Матчер - тот
    же, что в C06 (границы слов, все токены многословного терма).
 3. Сортировка: score по убыванию, затем `id` по возрастанию. Нулевой score не
    попадает в выдачу.
@@ -274,7 +274,7 @@ python3 scripts/job_seeker.py jobs-match '<PROFILE_JSON>' [--jobs-file /tmp/jobs
 
 ```json
 {
-  "summary": {"jobs_total": 12, "matched": 3, "filtered_out": 4},
+  "summary": {"jobs_total": 12, "matched": 3, "near_matches": 2, "filtered_out": 2, "unmatched": 5},
   "jobs": [{
     "id": 42, "title": "...", "apply_url": "...", "score": 8,
     "filter_unknown": [],
@@ -505,7 +505,7 @@ anthropic-beta: server-side-fallback-2026-07-01
 
 ## 12. Критерии приёмки
 
-Проверено 2026-09-03: `make test` (100/100), `make demo` и ручной stdio-прогон
+Проверено 2026-09-03: `make test` (155/155), `make demo` и ручной stdio-прогон
 MCP против mock-сервера проходят.
 
 - [x] `reserve`, `search` (без новых опций), `dedup` и все существующие тесты

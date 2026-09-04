@@ -108,7 +108,7 @@ def extract_profile(user_text, api_key):
         return None, None, "refusal"
     try:
         profile, target_job = _split_target_job(extract_json_object(_text_of(resp)))
-        if js.validate_profile(profile):
+        if js.validate_profile(profile, require_terms=not (MODE == "internal" and target_job)):
             return profile, target_job, None
     except ValueError:
         pass
@@ -120,7 +120,7 @@ def extract_profile(user_text, api_key):
         return None, None, "refusal"
     try:
         profile, target_job = _split_target_job(extract_json_object(_text_of(resp2)))
-        if js.validate_profile(profile):
+        if js.validate_profile(profile, require_terms=not (MODE == "internal" and target_job)):
             return profile, target_job, None
     except ValueError:
         pass
@@ -149,6 +149,14 @@ def format_jobs_plain(match_result, jobs_by_id):
         job = jobs_by_id.get(j["id"], {})
         city = job.get("city") or "город не указан"
         lines.append(f"{j['title']} — {city} — {_format_salary(job)} — {j.get('apply_url')}")
+    if match_result.get("near_matches"):
+        lines.append("\nПочти подходят (не по фильтрам):")
+        for j in match_result["near_matches"]:
+            job = jobs_by_id.get(j["id"], {})
+            city = job.get("city") or "город не указан"
+            reason = "; ".join(g["message"] for g in j.get("gaps") or [])
+            line = f"{j['title']} — {city} — {_format_salary(job)} — {j.get('apply_url')}"
+            lines.append(f"{line} ({reason})" if reason else line)
     return "\n".join(lines) if lines else "Подходящих вакансий по вашему описанию не нашлось."
 
 
@@ -289,8 +297,10 @@ def handle_update(chat_id, text, last_request_ts, jobs_cache, last_profile, user
             _log(chat_id, "gaps")
             return
 
-    result = js.match_jobs(jobs, profile)
+    result = js.match_jobs(jobs, profile, include_filter_mismatches=True)
     jobs_by_id = {j["id"]: j for j in jobs}
+    for near in result["near_matches"]:
+        near["gaps"], _ = js.compute_gaps(jobs_by_id[near["id"]], profile)
     text_out = format_jobs_plain(result, jobs_by_id)
     if MODE == "internal" and target_job:
         if similar:

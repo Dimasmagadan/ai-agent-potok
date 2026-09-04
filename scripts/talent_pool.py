@@ -24,6 +24,13 @@ TOKEN = os.environ.get("POTOK_API_TOKEN", "")
 HIRED_EXCLUDE_STATES = {"cancel_hire", "hire_canceled"}
 
 
+def _positive_int(value):
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("значение должно быть положительным целым числом")
+    return parsed
+
+
 class FetchError(RuntimeError):
     """An API page could not be retrieved after retrying."""
 
@@ -415,8 +422,25 @@ def _find_quote(text, term, max_len=120):
     return snippet[:max_len].strip()
 
 
+def validate_terms(terms, require_nonempty=True):
+    if not isinstance(terms, list) or (require_nonempty and not terms):
+        return False
+    return all(
+        isinstance(term, dict)
+        and set(term) == {"term", "kind"}
+        and isinstance(term["term"], str)
+        and bool(term["term"].strip())
+        and term["kind"] in {"original", "synonym"}
+        for term in terms
+    )
+
+
 def search_reserve(reserve, terms, top_n=10, cv_cache_dir=None):
     """terms: [{"term": str, "kind": "original"|"synonym"}, ...]"""
+    if not validate_terms(terms):
+        raise ValueError("terms должен быть непустым списком термов")
+    if isinstance(top_n, bool) or not isinstance(top_n, int) or top_n < 1:
+        raise ValueError("top_n должен быть положительным целым числом")
     cv_cache = _load_cv_cache(cv_cache_dir) if cv_cache_dir else {}
     with_cv = without_cv = 0
     results = []
@@ -537,6 +561,33 @@ def _normalize_criteria(raw):
     return out
 
 
+def _validate_criteria(raw, name):
+    if raw is None:
+        return
+    if not isinstance(raw, dict) or set(raw) - {
+        "salary_to", "currency_type", "schedule_type", "experience_minimum_years", "experience_type", "city", "role_terms", "profile_terms_any"
+    }:
+        raise ReopenValidationError("VALIDATION_ERROR", f"{name} имеет неверную структуру")
+    if raw.get("salary_to") is not None and (
+        isinstance(raw["salary_to"], bool) or not isinstance(raw["salary_to"], (int, float)) or raw["salary_to"] < 0
+    ):
+        raise ReopenValidationError("VALIDATION_ERROR", f"{name}.salary_to должен быть неотрицательным числом")
+    if raw.get("experience_minimum_years") is not None and (
+        isinstance(raw["experience_minimum_years"], bool) or not isinstance(raw["experience_minimum_years"], int) or raw["experience_minimum_years"] < 0
+    ):
+        raise ReopenValidationError("VALIDATION_ERROR", f"{name}.experience_minimum_years должен быть неотрицательным целым числом")
+    for field in ("currency_type", "schedule_type", "experience_type", "city"):
+        if raw.get(field) is not None and (not isinstance(raw[field], str) or not raw[field].strip()):
+            raise ReopenValidationError("VALIDATION_ERROR", f"{name}.{field} должен быть непустой строкой")
+    if raw.get("experience_type") is not None and raw["experience_type"] not in EXPERIENCE_BUCKET_MIN_YEARS:
+        raise ReopenValidationError("VALIDATION_ERROR", f"{name}.experience_type имеет неподдерживаемое значение")
+    for field in ("role_terms", "profile_terms_any"):
+        if raw.get(field) is not None and (
+            not isinstance(raw[field], list) or any(not isinstance(item, str) or not item.strip() for item in raw[field])
+        ):
+            raise ReopenValidationError("VALIDATION_ERROR", f"{name}.{field} должен быть списком непустых строк")
+
+
 def _criteria_from_job(job):
     if not job:
         return {}
@@ -624,6 +675,26 @@ def _detect_directional_changes(criteria):
 
 
 def _validate_request(request):
+    if not isinstance(request, dict) or set(request) - {
+        "target_job_id", "target_job_description", "source_job_id", "use_target_as_source", "source_represents_previous_criteria",
+        "previous_criteria", "current_criteria", "applicant_salary_currency", "context_terms", "declination_reason_mapping", "applicant_url_template",
+    }:
+        raise ReopenValidationError("VALIDATION_ERROR", "request имеет неверную структуру")
+    for field in ("previous_criteria", "current_criteria"):
+        if field in request and request[field] is None:
+            raise ReopenValidationError("VALIDATION_ERROR", f"{field} должен быть объектом")
+        _validate_criteria(request.get(field), field)
+    if "previous_criteria" in request and not request["previous_criteria"]:
+        raise ReopenValidationError("VALIDATION_ERROR", "previous_criteria не должен быть пустым")
+    for field in ("target_job_id", "source_job_id"):
+        if field in request and (isinstance(request[field], bool) or not isinstance(request[field], int) or request[field] < 1):
+            raise ReopenValidationError("VALIDATION_ERROR", f"{field} должен быть положительным целым числом")
+    for field in ("target_job_description", "applicant_salary_currency", "applicant_url_template"):
+        if field in request and (not isinstance(request[field], str) or not request[field].strip()):
+            raise ReopenValidationError("VALIDATION_ERROR", f"{field} должен быть непустой строкой")
+    for field in ("use_target_as_source", "source_represents_previous_criteria"):
+        if field in request and not isinstance(request[field], bool):
+            raise ReopenValidationError("VALIDATION_ERROR", f"{field} должен быть boolean")
     target_job_id = request.get("target_job_id")
     source_job_id = request.get("source_job_id")
     use_target_as_source = bool(request.get("use_target_as_source"))
@@ -632,9 +703,15 @@ def _validate_request(request):
 
     if not target_job_id and not request.get("target_job_description"):
         raise ReopenValidationError("VALIDATION_ERROR", "Нужен target_job_id или target_job_description")
+    if target_job_id and request.get("target_job_description"):
+        raise ReopenValidationError("VALIDATION_ERROR", "Передайте target_job_id или target_job_description, но не оба")
+    if not target_job_id and not request.get("current_criteria"):
+        raise ReopenValidationError("VALIDATION_ERROR", "target_job_description требует явных current_criteria")
+    if use_target_as_source and not target_job_id:
+        raise ReopenValidationError("VALIDATION_ERROR", "use_target_as_source=true требует target_job_id")
 
-    if use_target_as_source and source_job_id and source_job_id != target_job_id:
-        raise ReopenValidationError("VALIDATION_ERROR", "use_target_as_source=true конфликтует с отличным source_job_id")
+    if use_target_as_source and source_job_id:
+        raise ReopenValidationError("VALIDATION_ERROR", "Передайте source_job_id или use_target_as_source=true, но не оба")
     if use_target_as_source:
         source_job_id = target_job_id
     if not source_job_id:
@@ -652,6 +729,19 @@ def _validate_request(request):
         raise ReopenValidationError(
             "VALIDATION_ERROR", "Нет источника прежних условий: previous_criteria или source_represents_previous_criteria"
         )
+
+    url_template = request.get("applicant_url_template")
+    if url_template:
+        without_id = url_template.replace("{id}", "", 1)
+        if (
+            not re.match(r"^https?://", url_template, re.IGNORECASE)
+            or url_template.count("{id}") != 1
+            or "{" in without_id
+            or "}" in without_id
+        ):
+            raise ReopenValidationError(
+                "VALIDATION_ERROR", "applicant_url_template должен быть HTTP(S)-шаблоном ровно с одним {id}"
+            )
 
     currency_confirmed = False
     applicant_currency = request.get("applicant_salary_currency")
@@ -1001,21 +1091,44 @@ def _validate_mapping(mapping):
         raise ReopenValidationError("VALIDATION_ERROR", "declination_reason_mapping должен быть объектом")
     for cat, cfg in mapping.items():
         if cat not in CONTEXT_CATEGORIES:
-            continue
+            raise ReopenValidationError("VALIDATION_ERROR", f"declination_reason_mapping.{cat} не поддерживается")
         if not isinstance(cfg, list):
             raise ReopenValidationError("VALIDATION_ERROR", f"declination_reason_mapping.{cat} должен быть списком")
         for item in cfg:
-            if isinstance(item, bool) or (
-                not isinstance(item, int)
-                and not (isinstance(item, dict) and isinstance(item.get("reason_id"), int) and not isinstance(item.get("reason_id"), bool))
-            ):
+            if cat in ("schedule", "location"):
+                valid = (
+                    isinstance(item, dict)
+                    and set(item) == {"reason_id", "from", "to"}
+                    and isinstance(item["reason_id"], int)
+                    and not isinstance(item["reason_id"], bool)
+                    and isinstance(item["from"], str)
+                    and bool(item["from"].strip())
+                    and isinstance(item["to"], str)
+                    and bool(item["to"].strip())
+                )
+            else:
+                valid = isinstance(item, int) and not isinstance(item, bool)
+            if not valid:
                 raise ReopenValidationError("VALIDATION_ERROR", f"declination_reason_mapping.{cat} содержит некорректный элемент")
+
+
+def _validate_context_terms(context_terms):
+    if context_terms is None:
+        return
+    if not isinstance(context_terms, dict) or set(context_terms) - set(CONTEXT_CATEGORIES):
+        raise ReopenValidationError("VALIDATION_ERROR", "context_terms имеет неверную структуру")
+    for category, terms in context_terms.items():
+        if not isinstance(terms, list) or any(not isinstance(term, str) or not term.strip() for term in terms):
+            raise ReopenValidationError("VALIDATION_ERROR", f"context_terms.{category} должен быть списком непустых строк")
 
 
 def run_reopen(request, mapping=None, top=20):
     warnings = []
     try:
+        if isinstance(top, bool) or not isinstance(top, int) or top < 1:
+            raise ReopenValidationError("VALIDATION_ERROR", "top должен быть положительным целым числом")
         _validate_mapping(mapping)
+        _validate_context_terms(request.get("context_terms") if isinstance(request, dict) else None)
         prep = _validate_request(request)
         target_job_id, source_job_id = prep["target_job_id"], prep["source_job_id"]
 
@@ -1205,7 +1318,7 @@ def main():
         "terms_json", help='JSON: [{"term": "python", "kind": "original"}, {"term": "django", "kind": "synonym"}]'
     )
     p_search.add_argument("--reserve-file", help="JSON-файл с резервом (вывод команды reserve); иначе строится заново")
-    p_search.add_argument("--top", type=int, default=10)
+    p_search.add_argument("--top", type=_positive_int, default=10)
     p_search.add_argument("--cv-cache-dir", default=None, help="каталог CV-кэша (см. cv-index) для полнотекстового поиска")
 
     p_cvindex = sub.add_parser("cv-index", help="скачать и извлечь текст резюме кандидатов резерва в локальный кэш")
@@ -1215,7 +1328,7 @@ def main():
 
     p_reopen = sub.add_parser("reopen", help="пересмотр прошлых кандидатов при изменении условий вакансии (SDD C07)")
     p_reopen.add_argument("request_json", help="REQUEST_JSON (см. SDD-C07-REOPEN-CANDIDATES.md §4)")
-    p_reopen.add_argument("--top", type=int, default=20)
+    p_reopen.add_argument("--top", type=_positive_int, default=20)
     p_reopen.add_argument("--source-job-id", type=int, default=None)
     p_reopen.add_argument("--target-job-id", type=int, default=None)
     p_reopen.add_argument("--declination-reasons-file", default=None)

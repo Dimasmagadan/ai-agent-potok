@@ -18,6 +18,13 @@ OPEN_BASE_URL = os.environ.get("POTOK_OPEN_BASE_URL", "").rstrip("/")
 CONSTRUCTOR_ID = os.environ.get("POTOK_CONSTRUCTOR_ID", "")
 
 
+def _positive_int(value):
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("значение должно быть положительным целым числом")
+    return parsed
+
+
 class _TextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -48,6 +55,7 @@ def _parse_open_job(raw, open_base_url):
         "currency": salary.get("currency"),
         "schedule": raw.get("schedule_type"),
         "description": _strip_html(description) if description else None,
+        "key_skills": raw.get("key_skills") or [],
         "apply_url": f"{open_base_url}/jobs/{raw.get('id')}" if open_base_url and raw.get("id") is not None else None,
     }
 
@@ -140,12 +148,12 @@ def _score_job(job, terms):
     return total, evidence
 
 
-def validate_profile(profile):
+def validate_profile(profile, require_terms=False):
     if not isinstance(profile, dict) or set(profile) - {"terms", "filters"}:
         return False
     terms = profile.get("terms")
     filters = profile.get("filters", {})
-    if not isinstance(terms, list) or not isinstance(filters, dict):
+    if not isinstance(terms, list) or (require_terms and not terms) or not isinstance(filters, dict):
         return False
     if set(filters) - {"city", "schedule", "salary_from"}:
         return False
@@ -158,39 +166,61 @@ def validate_profile(profile):
         return False
     if "schedule" in filters and (not isinstance(filters["schedule"], str) or not filters["schedule"].strip()):
         return False
-    if "salary_from" in filters and (isinstance(filters["salary_from"], bool) or not isinstance(filters["salary_from"], (int, float))):
+    if "salary_from" in filters and (
+        isinstance(filters["salary_from"], bool) or not isinstance(filters["salary_from"], (int, float)) or filters["salary_from"] < 0
+    ):
         return False
     return True
 
 
-def match_jobs(jobs, profile, top=10):
+def match_jobs(jobs, profile, top=10, include_filter_mismatches=False):
+    if isinstance(top, bool) or not isinstance(top, int) or top < 1:
+        raise ValueError("top должен быть положительным целым числом")
     terms = profile.get("terms") or []
     filters = profile.get("filters") or {}
-    matched, filtered_out = [], 0
+    matched, near_matches, filtered_out, unmatched = [], [], 0, 0
     for job in jobs:
         passed, unknown = _apply_filters(job, filters)
-        if not passed:
+        if not passed and not include_filter_mismatches:
             filtered_out += 1
             continue
         score, evidence = _score_job(job, terms)
         if score <= 0:
+            if passed:
+                unmatched += 1
+            else:
+                filtered_out += 1
             continue
-        matched.append(
-            {
-                "id": job["id"],
-                "title": job.get("title"),
-                "apply_url": job.get("apply_url"),
-                "score": score,
-                "filter_unknown": unknown,
-                "evidence": evidence,
-            }
-        )
-    matched.sort(key=lambda j: j["id"])
-    matched.sort(key=lambda j: -j["score"])
+        row = {
+            "id": job["id"],
+            "title": job.get("title"),
+            "apply_url": job.get("apply_url"),
+            "score": score,
+            "filter_unknown": unknown,
+            "evidence": evidence,
+        }
+        if passed:
+            matched.append(row)
+        elif include_filter_mismatches:
+            near_matches.append(row)
+        else:
+            filtered_out += 1
+    for rows in (matched, near_matches):
+        rows.sort(key=lambda j: j["id"])
+        rows.sort(key=lambda j: -j["score"])
     matched_count = len(matched)
+    returned_matches = matched[:top]
+    near_limit = max(0, top - len(returned_matches))
     return {
-        "summary": {"jobs_total": len(jobs), "matched": matched_count, "filtered_out": filtered_out},
-        "jobs": matched[:top],
+        "summary": {
+            "jobs_total": len(jobs),
+            "matched": matched_count,
+            "near_matches": len(near_matches),
+            "filtered_out": filtered_out,
+            "unmatched": unmatched,
+        },
+        "jobs": returned_matches,
+        "near_matches": near_matches[:near_limit] if include_filter_mismatches else [],
     }
 
 
@@ -297,7 +327,7 @@ def main():
     p_match = sub.add_parser("jobs-match", help="подбор вакансий под профиль соискателя")
     p_match.add_argument("profile_json", help='PROFILE_JSON: {"terms":[...], "filters": {...}} (см. SDD §6.2)')
     p_match.add_argument("--jobs-file", default=None, help="JSON-файл со списком вакансий (вывод jobs-list); иначе запрашивается заново")
-    p_match.add_argument("--top", type=int, default=10)
+    p_match.add_argument("--top", type=_positive_int, default=10)
     p_match.add_argument("--fallback-v3", action="store_true")
 
     p_gaps = sub.add_parser("jobs-gaps", help="отчёт о пробелах профиля для конкретной вакансии (см. SDD-C09 §3)")
@@ -333,7 +363,7 @@ def main():
             print(json.dumps({"source": "constructor", "jobs": jobs}, ensure_ascii=False, indent=2))
     elif args.cmd == "jobs-match":
         profile = json.loads(args.profile_json)
-        if not validate_profile(profile):
+        if not validate_profile(profile, require_terms=True):
             sys.exit("PROFILE_JSON имеет неверную структуру")
         jobs = _resolve_jobs(args)
         print(json.dumps(match_jobs(jobs, profile, args.top), ensure_ascii=False, indent=2))

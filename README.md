@@ -102,7 +102,7 @@ python3 scripts/job_seeker.py jobs-match '{"terms":[{"term":"python","kind":"ori
 
 python3 scripts/talent_pool.py reopen '{"target_job_id":202,"source_job_id":201,"previous_criteria":{"salary_to":280000,"currency_type":"RUR","schedule_type":"fullDay","experience_minimum_years":3,"city":"1","role_terms":["python","backend"],"profile_terms_any":["django"]},"current_criteria":{"salary_to":350000,"currency_type":"RUR","schedule_type":"remote","experience_minimum_years":2,"city":"2","role_terms":["python","backend"],"profile_terms_any":["django","fastapi"]},"applicant_salary_currency":"RUR","context_terms":{"schedule":["удалённо"]},"declination_reason_mapping":{"experience_minimum":[8]}}'
 
-make test                                                  # 136 тестов ядра (stdlib unittest)
+make test                                                  # 155 тестов ядра (stdlib unittest)
 ```
 
 `reserve`, `search` и `dedup` возвращают уже собранную часть данных, если API

@@ -32,9 +32,10 @@ TOOLS = [
             "properties": {
                 "terms": {
                     "type": "array",
+                    "minItems": 1,
                     "items": {
                         "type": "object",
-                        "properties": {"term": {"type": "string"}, "kind": {"type": "string", "enum": ["original", "synonym"]}},
+                        "properties": {"term": {"type": "string", "pattern": ".*\\S.*"}, "kind": {"type": "string", "enum": ["original", "synonym"]}},
                         "required": ["term", "kind"],
                         "additionalProperties": False,
                     },
@@ -67,18 +68,26 @@ TOOLS = [
                     "description": "Полный контекст изменения. Для повышения вилки укажите target_job_id, source_job_id, previous_criteria и current_criteria. "
                     "Если кандидатов нужно брать из той же вакансии, укажите use_target_as_source:true и явные previous_criteria.",
                     "properties": {
-                        "target_job_id": {"type": "integer", "description": "ID целевой вакансии с новыми условиями."},
-                        "target_job_description": {"type": "string", "description": "Явное описание целевой вакансии, только если её ID неизвестен."},
-                        "source_job_id": {"type": "integer", "description": "ID вакансии, из которой взять прошлых кандидатов."},
+                        "target_job_id": {"type": "integer", "minimum": 1, "description": "ID целевой вакансии с новыми условиями."},
+                        "target_job_description": {"type": "string", "pattern": ".*\\S.*", "description": "Описание целевой вакансии, только если её ID неизвестен; требует current_criteria."},
+                        "source_job_id": {"type": "integer", "minimum": 1, "description": "ID вакансии, из которой взять прошлых кандидатов."},
                         "use_target_as_source": {"type": "boolean", "description": "true, если прошлых кандидатов нужно брать из target_job_id."},
                         "source_represents_previous_criteria": {"type": "boolean", "description": "true, только если прежние условия берутся из source_job_id, без previous_criteria."},
                         "previous_criteria": {"$ref": "#/$defs/criteria", "description": "Прежние условия. Для вилки: salary_to и currency_type."},
                         "current_criteria": {"$ref": "#/$defs/criteria", "description": "Новые условия. Для вилки: salary_to и currency_type."},
-                        "applicant_salary_currency": {"type": "string", "description": "Валюта зарплатных ожиданий кандидатов; для рублей RUR. Обязательна для salary_unlocked."},
-                        "context_terms": {"type": "object", "description": "Подтверждённые рекрутёром точные термины для поиска в тегах и комментариях."},
-                        "declination_reason_mapping": {"type": "object", "description": "Контролируемое сопоставление категорий изменений с ID причин отказа."}
+                        "applicant_salary_currency": {"type": "string", "pattern": ".*\\S.*", "description": "Валюта зарплатных ожиданий кандидатов; для рублей RUR. Обязательна для salary_unlocked."},
+                        "context_terms": {"anyOf": [{"$ref": "#/$defs/context_terms"}, {"type": "null"}], "description": "Подтверждённые рекрутёром точные термины для поиска в тегах и комментариях."},
+                        "declination_reason_mapping": {"anyOf": [{"$ref": "#/$defs/declination_reason_mapping"}, {"type": "null"}], "description": "Контролируемое сопоставление категорий изменений с ID причин отказа."},
+                        "applicant_url_template": {"type": "string", "pattern": "^[hH][tT][tT][pP][sS]?://[^{}]*\\{id\\}[^{}]*$", "description": "HTTP(S)-шаблон ссылки с ровно одним placeholder {id}."}
                     },
-                    "additionalProperties": False
+                    "additionalProperties": False,
+                    "allOf": [
+                        {"oneOf": [{"required": ["target_job_id"], "not": {"required": ["target_job_description"]}}, {"required": ["target_job_description"], "not": {"required": ["target_job_id"]}}]},
+                        {"oneOf": [{"required": ["source_job_id"], "not": {"properties": {"use_target_as_source": {"const": True}}, "required": ["use_target_as_source"]}}, {"properties": {"use_target_as_source": {"const": True}}, "required": ["use_target_as_source"], "not": {"required": ["source_job_id"]}}]},
+                        {"oneOf": [{"properties": {"previous_criteria": {"type": "object", "minProperties": 1}}, "required": ["previous_criteria"], "not": {"properties": {"source_represents_previous_criteria": {"const": True}}, "required": ["source_represents_previous_criteria"]}}, {"properties": {"source_represents_previous_criteria": {"const": True}}, "required": ["source_represents_previous_criteria"], "not": {"required": ["previous_criteria"]}}]},
+                        {"if": {"properties": {"use_target_as_source": {"const": True}}, "required": ["use_target_as_source"]}, "then": {"required": ["target_job_id"]}},
+                        {"if": {"not": {"required": ["target_job_id"]}}, "then": {"properties": {"current_criteria": {"type": "object", "minProperties": 1}}, "required": ["current_criteria"]}}
+                    ]
                 },
                 "top": {"type": "integer", "minimum": 1, "description": "Максимальное число кандидатов, по умолчанию 20."}
             },
@@ -88,23 +97,51 @@ TOOLS = [
                 "criteria": {
                     "type": "object",
                     "properties": {
-                        "salary_to": {"type": "number", "description": "Верхняя граница вилки."},
-                        "currency_type": {"type": "string", "description": "Валюта вилки, например RUR."},
-                        "schedule_type": {"type": "string"},
-                        "experience_minimum_years": {"type": "number"},
-                        "city": {"type": "string"},
-                        "role_terms": {"type": "array", "items": {"type": "string"}},
-                        "profile_terms_any": {"type": "array", "items": {"type": "string"}}
+                        "salary_to": {"type": ["number", "null"], "minimum": 0, "description": "Верхняя граница вилки."},
+                        "currency_type": {"type": ["string", "null"], "pattern": ".*\\S.*", "description": "Валюта вилки, например RUR."},
+                        "schedule_type": {"type": ["string", "null"], "pattern": ".*\\S.*"},
+                        "experience_minimum_years": {"type": ["integer", "null"], "minimum": 0},
+                        "experience_type": {"type": ["string", "null"], "enum": ["noExperience", "between1And3", "between3And6", "moreThan6", None]},
+                        "city": {"type": ["string", "null"], "pattern": ".*\\S.*"},
+                        "role_terms": {"type": ["array", "null"], "items": {"type": "string", "pattern": ".*\\S.*"}},
+                        "profile_terms_any": {"type": ["array", "null"], "items": {"type": "string", "pattern": ".*\\S.*"}}
                     },
                     "additionalProperties": False
+                },
+                "context_terms": {
+                    "type": "object",
+                    "properties": {
+                        "salary": {"$ref": "#/$defs/terms"}, "location": {"$ref": "#/$defs/terms"}, "schedule": {"$ref": "#/$defs/terms"},
+                        "experience_minimum": {"$ref": "#/$defs/terms"}, "profile": {"$ref": "#/$defs/terms"}
+                    },
+                    "additionalProperties": False
+                },
+                "terms": {"type": "array", "items": {"type": "string", "pattern": ".*\\S.*"}},
+                "declination_reason_mapping": {
+                    "type": "object",
+                    "properties": {
+                        "salary": {"$ref": "#/$defs/reason_ids"}, "experience_minimum": {"$ref": "#/$defs/reason_ids"}, "profile": {"$ref": "#/$defs/reason_ids"},
+                        "schedule": {"$ref": "#/$defs/directional_reasons"}, "location": {"$ref": "#/$defs/directional_reasons"}
+                    },
+                    "additionalProperties": False
+                },
+                "reason_ids": {"type": "array", "items": {"type": "integer"}},
+                "directional_reasons": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"reason_id": {"type": "integer"}, "from": {"type": "string", "pattern": ".*\\S.*"}, "to": {"type": "string", "pattern": ".*\\S.*"}},
+                        "required": ["reason_id", "from", "to"],
+                        "additionalProperties": False
+                    }
                 }
             }
         },
     },
     {
         "name": "potok_jobs_match",
-        "description": "Подобрать открытые вакансии компании под профиль соискателя (термы + фильтры) и "
-        "показать пробелы по каждой подходящей вакансии. Используй, когда соискатель спрашивает, какие "
+        "description": "Подобрать открытые вакансии компании под профиль соискателя (термы + фильтры), "
+        "отдельно показать подходящие и близкие вакансии с пробелами. Используй, когда соискатель спрашивает, какие "
         "вакансии ему подходят и чего не хватает. Профиль обязан содержать terms; filters содержат только "
         "city, schedule и salary_from. Никогда не отправляет отклик — только ссылка apply_url.",
         "inputSchema": {
@@ -116,11 +153,12 @@ TOOLS = [
                     "properties": {
                         "terms": {
                             "type": "array",
+                            "minItems": 1,
                             "description": "Роль, технологии и навыки. Каждый элемент обязан содержать term и kind.",
                             "items": {
                                 "type": "object",
                                 "properties": {
-                                    "term": {"type": "string", "description": "Например: python, django, postgresql."},
+                                    "term": {"type": "string", "pattern": ".*\\S.*", "description": "Например: python, django, postgresql."},
                                     "kind": {"type": "string", "enum": ["original", "synonym"], "description": "original для слов пользователя, synonym для добавленного синонима."}
                                 },
                                 "required": ["term", "kind"],
@@ -130,9 +168,9 @@ TOOLS = [
                         "filters": {
                             "type": "object",
                             "properties": {
-                                "city": {"type": "string", "description": "Например: Санкт-Петербург."},
-                                "schedule": {"type": "string", "description": "Точное значение из вакансии, например remote."},
-                                "salary_from": {"type": "number", "description": "Минимальные зарплатные ожидания кандидата."}
+                                "city": {"type": "string", "pattern": ".*\\S.*", "description": "Например: Санкт-Петербург."},
+                                "schedule": {"type": "string", "pattern": ".*\\S.*", "description": "Точное значение из вакансии, например remote."},
+                                "salary_from": {"type": "number", "minimum": 0, "description": "Минимальные зарплатные ожидания кандидата."}
                             },
                             "additionalProperties": False
                         }
@@ -171,6 +209,8 @@ def _tool_dedup(_args):
 
 def _tool_reopen(args):
     request = args["request"]
+    if not isinstance(request, dict):
+        raise ValueError("request должен быть объектом")
     mapping = request.get("declination_reason_mapping")
     result, exit_code = tp.run_reopen(request, mapping=mapping, top=args.get("top", 20))
     if exit_code == 2:
@@ -181,14 +221,40 @@ def _tool_reopen(args):
 
 def _tool_jobs_match(args):
     profile = args["profile"]
-    if not js.validate_profile(profile):
+    if not js.validate_profile(profile, require_terms=True):
         raise ValueError("Некорректный profile: см. описание схемы potok_jobs_match")
     jobs = js.fetch_jobs_constructor(js.OPEN_BASE_URL, js.CONSTRUCTOR_ID)
-    result = js.match_jobs(jobs, profile, top=args.get("top", 10))
+    result = js.match_jobs(jobs, profile, top=args.get("top", 10), include_filter_mismatches=True)
     jobs_by_id = {job["id"]: job for job in jobs}
-    for matched in result["jobs"]:
-        matched["gaps"], matched["unknown_fields"] = js.compute_gaps(jobs_by_id[matched["id"]], profile)
+    for group in (result["jobs"], result["near_matches"]):
+        for matched in group:
+            matched["gaps"], matched["unknown_fields"] = js.compute_gaps(jobs_by_id[matched["id"]], profile)
     return result
+
+
+def _validate_tool_arguments(name, args):
+    if not isinstance(args, dict):
+        raise ValueError("arguments должен быть объектом")
+    allowed = {
+        "potok_reserve": set(),
+        "potok_search": {"terms", "cv"},
+        "potok_dedup": set(),
+        "potok_reopen": {"request", "top"},
+        "potok_jobs_match": {"profile", "top"},
+    }[name]
+    if set(args) - allowed:
+        raise ValueError("arguments содержит неподдерживаемые поля")
+    if "top" in args and (isinstance(args["top"], bool) or not isinstance(args["top"], int) or args["top"] < 1):
+        raise ValueError("top должен быть положительным целым числом")
+    if name == "potok_search":
+        if "terms" not in args or not tp.validate_terms(args["terms"]):
+            raise ValueError("terms должен быть непустым списком термов")
+        if "cv" in args and not isinstance(args["cv"], bool):
+            raise ValueError("cv должен быть boolean")
+    elif name == "potok_reopen" and "request" not in args:
+        raise ValueError("request обязателен")
+    elif name == "potok_jobs_match" and "profile" not in args:
+        raise ValueError("profile обязателен")
 
 
 TOOL_HANDLERS = {
@@ -214,6 +280,8 @@ def _error(msg_id, code, message):
 
 def handle_message(msg):
     """Обработать одно распарсенное JSON-RPC сообщение. Возвращает dict-ответ или None (notification)."""
+    if not isinstance(msg, dict):
+        return _error(None, -32600, "invalid request")
     method = msg.get("method")
     msg_id = msg.get("id")
     is_notification = "id" not in msg
@@ -226,12 +294,17 @@ def handle_message(msg):
         return _reply(msg_id, {"tools": TOOLS})
     if method == "tools/call":
         params = msg.get("params") or {}
+        if not isinstance(params, dict):
+            return _reply(msg_id, {"content": [{"type": "text", "text": "params должен быть объектом"}], "isError": True})
         name = params.get("name")
-        arguments = params.get("arguments") or {}
+        arguments = params["arguments"] if "arguments" in params else {}
+        if not isinstance(name, str):
+            return _reply(msg_id, {"content": [{"type": "text", "text": "name должен быть строкой"}], "isError": True})
         handler = TOOL_HANDLERS.get(name)
         if handler is None:
             return _reply(msg_id, {"content": [{"type": "text", "text": f"неизвестный инструмент: {name}"}], "isError": True})
         try:
+            _validate_tool_arguments(name, arguments)
             result = handler(arguments)
             text = json.dumps(result, ensure_ascii=False, indent=2)
             return _reply(msg_id, {"content": [{"type": "text", "text": text}], "isError": False})
@@ -258,7 +331,7 @@ def main():
             response = handle_message(msg)
         except Exception as e:
             _log(f"unhandled error: {e}")
-            response = _error(msg.get("id"), -32601, "method not found")
+            response = _error(msg.get("id") if isinstance(msg, dict) else None, -32601, "method not found")
         if response is not None:
             sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
             sys.stdout.flush()
