@@ -105,6 +105,22 @@ def all_jobs(warnings=None):
     return list(_paginate_page("/jobs.json", {"by_scope": "all"}, warnings))
 
 
+def find_jobs_by_name(jobs, query):
+    """Резолв названия вакансии в ID для reopen/дальнейших вызовов. Токен-OR по `name`,
+    ранжировано по числу совпавших токенов; без стемминга/синонимов (это забота вызывающего LLM)."""
+    query_tokens = set(_tokens(query))
+    if not query_tokens:
+        raise ValueError("query должен быть непустой строкой")
+    results = []
+    for j in jobs:
+        name = j.get("name") or ""
+        overlap = query_tokens & set(_tokens(name))
+        if overlap:
+            results.append({"id": j["id"], "name": name, "score": len(overlap)})
+    results.sort(key=lambda r: (-r["score"], r["id"]))
+    return results
+
+
 def all_applicants(warnings=None):
     return list(_paginate_page("/applicants.json", warnings=warnings))
 
@@ -1313,6 +1329,9 @@ def main():
     sub.add_parser("reserve", help="построить кадровый резерв (JSON-массив кандидатов)")
     sub.add_parser("dedup", help="найти дубли кандидатов по телефону/email")
 
+    p_jobsfind = sub.add_parser("jobs-find", help="найти внутренние вакансии по названию (резолв имени в ID для reopen)")
+    p_jobsfind.add_argument("query", help="строка запроса, например 'разработчик'")
+
     p_search = sub.add_parser("search", help="поиск по резерву")
     p_search.add_argument(
         "terms_json", help='JSON: [{"term": "python", "kind": "original"}, {"term": "django", "kind": "synonym"}]'
@@ -1343,6 +1362,8 @@ def main():
         print(json.dumps(build_reserve_pool(warnings), ensure_ascii=False, indent=2))
     elif args.cmd == "dedup":
         print(json.dumps(find_duplicates(warnings=warnings), ensure_ascii=False, indent=2))
+    elif args.cmd == "jobs-find":
+        print(json.dumps(find_jobs_by_name(all_jobs(warnings), args.query), ensure_ascii=False, indent=2))
     elif args.cmd == "search":
         terms = json.loads(args.terms_json)
         if args.reserve_file:

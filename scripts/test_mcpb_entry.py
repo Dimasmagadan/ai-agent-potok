@@ -45,7 +45,7 @@ class McpbEntryTests(unittest.TestCase):
         responses = [json.loads(line) for line in process.stdout.splitlines()]
         self.assertEqual(responses[0]["result"]["protocolVersion"], "2025-06-18")
         self.assertEqual(responses[0]["result"]["serverInfo"], mcp_server.SERVER_INFO)
-        self.assertEqual(len(responses[1]["result"]["tools"]), 5)
+        self.assertEqual(len(responses[1]["result"]["tools"]), 6)
         for response in responses[2:]:
             self.assertFalse(response["result"]["isError"])
             self.assertTrue(json.loads(response["result"]["content"][0]["text"]))

@@ -139,6 +139,20 @@ TOOLS = [
         },
     },
     {
+        "name": "potok_jobs_find",
+        "description": "Найти внутренние вакансии «Потока» по названию — резолв имени в ID перед вызовом "
+        "potok_reopen. Используй, когда рекрутёр назвал вакансию по имени, а не по ID: покажи совпадения "
+        "пользователю (включая архивные — они нужны как source_job_id) и дай выбрать, не подставляй ID сам.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "pattern": ".*\\S.*", "description": "Название или его часть, например 'разработчик'."}
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "potok_jobs_match",
         "description": "Подобрать открытые вакансии компании под профиль соискателя (термы + фильтры), "
         "отдельно показать подходящие и близкие вакансии с пробелами. Используй, когда соискатель спрашивает, какие "
@@ -219,6 +233,11 @@ def _tool_reopen(args):
     return result
 
 
+def _tool_jobs_find(args):
+    warnings = []
+    return tp.find_jobs_by_name(tp.all_jobs(warnings), args["query"])
+
+
 def _tool_jobs_match(args):
     profile = args["profile"]
     if not js.validate_profile(profile, require_terms=True):
@@ -240,6 +259,7 @@ def _validate_tool_arguments(name, args):
         "potok_search": {"terms", "cv"},
         "potok_dedup": set(),
         "potok_reopen": {"request", "top"},
+        "potok_jobs_find": {"query"},
         "potok_jobs_match": {"profile", "top"},
     }[name]
     if set(args) - allowed:
@@ -253,6 +273,9 @@ def _validate_tool_arguments(name, args):
             raise ValueError("cv должен быть boolean")
     elif name == "potok_reopen" and "request" not in args:
         raise ValueError("request обязателен")
+    elif name == "potok_jobs_find":
+        if "query" not in args or not isinstance(args["query"], str) or not args["query"].strip():
+            raise ValueError("query должен быть непустой строкой")
     elif name == "potok_jobs_match" and "profile" not in args:
         raise ValueError("profile обязателен")
 
@@ -262,6 +285,7 @@ TOOL_HANDLERS = {
     "potok_search": _tool_search,
     "potok_dedup": _tool_dedup,
     "potok_reopen": _tool_reopen,
+    "potok_jobs_find": _tool_jobs_find,
     "potok_jobs_match": _tool_jobs_match,
 }
 

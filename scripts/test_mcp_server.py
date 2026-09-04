@@ -21,10 +21,13 @@ class ProtocolTests(unittest.TestCase):
         resp = srv.handle_message({"jsonrpc": "2.0", "method": "notifications/initialized"})
         self.assertIsNone(resp)
 
-    def test_tools_list_has_five_tools(self):
+    def test_tools_list_has_six_tools(self):
         resp = srv.handle_message({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         names = {t["name"] for t in resp["result"]["tools"]}
-        self.assertEqual(names, {"potok_reserve", "potok_search", "potok_dedup", "potok_reopen", "potok_jobs_match"})
+        self.assertEqual(
+            names,
+            {"potok_reserve", "potok_search", "potok_dedup", "potok_reopen", "potok_jobs_find", "potok_jobs_match"},
+        )
         for tool in resp["result"]["tools"]:
             self.assertFalse(tool["inputSchema"].get("additionalProperties", True))
 
@@ -85,6 +88,22 @@ class ToolCallTests(unittest.TestCase):
 
     def test_reopen_validation_error_is_error_true(self):
         resp = srv.handle_message({"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "potok_reopen", "arguments": {"request": {}}}})
+        self.assertTrue(resp["result"]["isError"])
+
+    def test_jobs_find_call_matches_cli_function(self):
+        jobs = [{"id": 101, "name": "Backend-разработчик (Java)"}]
+        with patch.object(tp, "all_jobs", return_value=jobs):
+            resp = srv.handle_message(
+                {"jsonrpc": "2.0", "id": 20, "method": "tools/call", "params": {"name": "potok_jobs_find", "arguments": {"query": "разработчик"}}}
+            )
+        self.assertFalse(resp["result"]["isError"])
+        self.assertIn('"id": 101', resp["result"]["content"][0]["text"])
+
+    def test_jobs_find_empty_query_is_error_without_hitting_network(self):
+        with patch.object(tp, "all_jobs", side_effect=AssertionError("should not be called")):
+            resp = srv.handle_message(
+                {"jsonrpc": "2.0", "id": 21, "method": "tools/call", "params": {"name": "potok_jobs_find", "arguments": {"query": "   "}}}
+            )
         self.assertTrue(resp["result"]["isError"])
 
     def test_jobs_match_invalid_profile_is_error_true_without_hitting_network(self):

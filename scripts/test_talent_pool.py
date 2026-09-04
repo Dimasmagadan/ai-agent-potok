@@ -49,6 +49,31 @@ class FindDuplicatesTests(unittest.TestCase):
         self.assertEqual(tp.find_duplicates([{"id": 1, "email": "a@x.com", "phones": ["999", "999"]}]), [])
 
 
+class FindJobsByNameTests(unittest.TestCase):
+    JOBS = [
+        {"id": 101, "name": "Backend-разработчик (Java)"},
+        {"id": 102, "name": "Frontend-разработчик (React)"},
+        {"id": 201, "name": "Python Backend Developer (архивная версия)"},
+        {"id": 202, "name": "Python Backend Developer"},
+    ]
+
+    def test_single_token_matches_only_overlapping_jobs(self):
+        res = tp.find_jobs_by_name(self.JOBS, "разработчик")
+        self.assertEqual({r["id"] for r in res}, {101, 102})
+
+    def test_multiword_query_ranks_by_token_overlap(self):
+        res = tp.find_jobs_by_name(self.JOBS, "python backend developer")
+        self.assertEqual([r["id"] for r in res], [201, 202, 101])
+        self.assertEqual([r["score"] for r in res], [3, 3, 1])
+
+    def test_no_match_returns_empty_list(self):
+        self.assertEqual(tp.find_jobs_by_name(self.JOBS, "devops"), [])
+
+    def test_blank_query_raises(self):
+        with self.assertRaises(ValueError):
+            tp.find_jobs_by_name(self.JOBS, "   ")
+
+
 class SearchReserveTests(unittest.TestCase):
     RESERVE = [
         {"id": 1, "name": "JS Dev", "title": "JavaScript developer", "tags": ["react"]},
