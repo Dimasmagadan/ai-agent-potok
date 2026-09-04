@@ -139,6 +139,12 @@ class ScoreJobTests(unittest.TestCase):
         self.assertEqual(score, 2)  # description(1) * original(2)
         self.assertEqual(evidence[0]["source"], "description")
 
+    def test_key_skill_only_term_scores(self):
+        job = dict(self.JOB, key_skills=["PostgreSQL"])
+        score, evidence = js._score_job(job, [{"term": "postgresql", "kind": "original"}])
+        self.assertEqual(score, 2)
+        self.assertEqual(evidence[0]["source"], "key_skills")
+
     def test_no_match_scores_zero_and_no_evidence(self):
         score, evidence = js._score_job(self.JOB, [{"term": "golang", "kind": "original"}])
         self.assertEqual(score, 0)
@@ -163,6 +169,14 @@ class MatchJobsTests(unittest.TestCase):
         profile = {"terms": [{"term": "golang", "kind": "original"}], "filters": {}}
         result = js.match_jobs(self.JOBS, profile)
         self.assertEqual(result["jobs"], [])
+
+    def test_internal_v3_resolution_keeps_unpublished_jobs(self):
+        args = type("Args", (), {"jobs_file": None, "fallback_v3": True, "internal": True, "include_private": False})()
+        with patch.object(js.tp, "BASE_URL", "https://api.example"), patch.object(js.tp, "TOKEN", "token"), patch.object(
+            js, "fetch_jobs_v3_fallback", return_value=[]
+        ) as fetch:
+            js._resolve_jobs(args)
+        self.assertFalse(fetch.call_args.kwargs["published_only"])
 
 
 class ComputeGapsTests(unittest.TestCase):

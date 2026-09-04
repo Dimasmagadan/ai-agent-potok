@@ -12,6 +12,7 @@ timestamp, статус обработки.
 """
 import json
 import os
+import re
 import sys
 import time
 from urllib.error import HTTPError, URLError
@@ -26,6 +27,9 @@ API_BASE = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 MODE = os.environ.get("JOB_SEEKER_MODE", "external")
 INCLUDE_PRIVATE = os.environ.get("JOB_SEEKER_INCLUDE_PRIVATE") == "1"
+ALLOWED_USER_IDS = frozenset(
+    int(user_id) for user_id in os.environ.get("JOB_SEEKER_ALLOWED_USER_IDS", "").split(",") if user_id.strip().isdigit()
+)
 
 MAX_TEXT_LEN = 1000
 RATE_LIMIT_SECONDS = 5
@@ -158,8 +162,9 @@ def match_target_job(target_job, jobs):
     if not target_job:
         return None, []
     query = target_job.strip().casefold()
-    if query.isdigit():
-        job = next((j for j in jobs if str(j.get("id")) == query), None)
+    id_match = re.search(r"\b\d+\b", query)
+    if id_match:
+        job = next((j for j in jobs if str(j.get("id")) == id_match.group()), None)
         if job is not None:
             return job, []
     candidates = [j for j in jobs if query in (j.get("title") or "").casefold()]
@@ -188,7 +193,7 @@ def get_updates(offset):
 
 
 def send_message(chat_id, text):
-    data = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}).encode("utf-8")
+    data = json.dumps({"chat_id": chat_id, "text": text, "disable_web_page_preview": True}).encode("utf-8")
     req = Request(f"{API_BASE}/sendMessage", data=data, headers={"Content-Type": "application/json"}, method="POST")
     try:
         with urlopen(req, timeout=30):
@@ -211,8 +216,15 @@ def get_cached_jobs(cache, now):
     return cache["jobs"]
 
 
-def handle_update(chat_id, text, last_request_ts, jobs_cache, last_profile):
+def handle_update(chat_id, text, last_request_ts, jobs_cache, last_profile, user_id=None, chat_type="private"):
     now = time.time()
+    user_id = chat_id if user_id is None else user_id
+
+    if MODE == "internal":
+        if chat_type != "private" or user_id not in ALLOWED_USER_IDS:
+            send_message(chat_id, "Этот бот доступен только авторизованным сотрудникам в личном чате.")
+            _log(chat_id, "access_denied")
+            return
 
     if text.strip() == "/start":
         send_message(chat_id, START_MESSAGE_INTERNAL if MODE == "internal" else START_MESSAGE)
@@ -224,11 +236,11 @@ def handle_update(chat_id, text, last_request_ts, jobs_cache, last_profile):
         _log(chat_id, "too_long")
         return
 
-    if is_rate_limited(last_request_ts, chat_id, now):
+    if is_rate_limited(last_request_ts, user_id, now):
         send_message(chat_id, "Подождите пару секунд между запросами.")
         _log(chat_id, "rate_limited")
         return
-    last_request_ts[chat_id] = now
+    last_request_ts[user_id] = now
 
     try:
         profile, target_job, refusal = extract_profile(text, ANTHROPIC_API_KEY)
@@ -249,14 +261,16 @@ def handle_update(chat_id, text, last_request_ts, jobs_cache, last_profile):
     if MODE == "internal":
         # Диалог двухшаговый (резюме → «чего не хватает для вакансии N»); без памяти
         # второе сообщение считало бы пробелом всё подряд (SDD-C09 §4 п.4).
-        if not profile["terms"] and not profile.get("filters") and target_job:
-            profile = last_profile.get(chat_id)
-            if profile is None:
+        saved_profile = last_profile.get(user_id)
+        if target_job and saved_profile is not None:
+            profile = saved_profile
+        elif not profile["terms"] and not profile.get("filters") and target_job:
+            if saved_profile is None:
                 send_message(chat_id, "Сначала опишите, пожалуйста, себя — роль, навыки, опыт — а потом спрашивайте про конкретную вакансию.")
                 _log(chat_id, "no_profile_for_gaps")
                 return
         else:
-            last_profile[chat_id] = profile
+            last_profile[user_id] = profile
 
     try:
         jobs = get_cached_jobs(jobs_cache, now)
@@ -278,9 +292,12 @@ def handle_update(chat_id, text, last_request_ts, jobs_cache, last_profile):
     result = js.match_jobs(jobs, profile)
     jobs_by_id = {j["id"]: j for j in jobs}
     text_out = format_jobs_plain(result, jobs_by_id)
-    if MODE == "internal" and target_job and similar:
-        titles = "; ".join(f"{j.get('title')} (id={j['id']})" for j in similar)
-        text_out += f"\n\nНе удалось однозначно определить вакансию «{target_job}». Похожие по названию: {titles}."
+    if MODE == "internal" and target_job:
+        if similar:
+            titles = "; ".join(f"{j.get('title')} (id={j['id']})" for j in similar)
+            text_out += f"\n\nНе удалось однозначно определить вакансию «{target_job}». Похожие по названию: {titles}."
+        else:
+            text_out += f"\n\nНе удалось найти вакансию «{target_job}»."
     send_message(chat_id, text_out)
     _log(chat_id, "matched")
 
@@ -298,6 +315,8 @@ def run():
         sys.exit("ANTHROPIC_API_KEY не задан")
     if MODE == "internal" and (not js.tp.BASE_URL or not js.tp.TOKEN):
         sys.exit("JOB_SEEKER_MODE=internal требует POTOK_BASE_URL и POTOK_API_TOKEN")
+    if MODE == "internal" and not ALLOWED_USER_IDS:
+        sys.exit("JOB_SEEKER_MODE=internal требует JOB_SEEKER_ALLOWED_USER_IDS")
 
     last_update_id = 0
     last_request_ts = {}
@@ -316,7 +335,15 @@ def run():
             msg = upd.get("message") or {}
             if "text" not in msg:
                 continue
-            handle_update(msg["chat"]["id"], msg["text"], last_request_ts, jobs_cache, last_profile)
+            handle_update(
+                msg["chat"]["id"],
+                msg["text"],
+                last_request_ts,
+                jobs_cache,
+                last_profile,
+                user_id=(msg.get("from") or {}).get("id"),
+                chat_type=msg["chat"].get("type"),
+            )
 
 
 if __name__ == "__main__":

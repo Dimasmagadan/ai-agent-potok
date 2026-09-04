@@ -208,7 +208,9 @@ class DownloadCvTests(unittest.TestCase):
                 raise unauthorized
             return fake_open(req, timeout)
 
-        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", fake_urlopen):
+        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", fake_urlopen), patch.object(
+            tp, "build_opener", return_value=MagicMock(open=fake_open)
+        ):
             data, err = tp._download_cv("https://example.test/cv/1.pdf")
 
         self.assertEqual((data, err), (b"pdf-bytes", None))
@@ -233,10 +235,25 @@ class DownloadCvTests(unittest.TestCase):
             captured["url"] = req.full_url
             return response
 
-        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", fake_urlopen):
+        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", fake_urlopen), patch.object(
+            tp, "build_opener", return_value=MagicMock(open=fake_urlopen)
+        ):
             data, err = tp._download_cv("https://example.test/cv/1.pdf?download=1")
         self.assertEqual((data, err), (b"pdf-bytes", None))
         self.assertEqual(captured["url"], "https://example.test/cv/1.pdf?download=1&token=secret-token")
+
+    def test_401_retry_refuses_redirects_with_query_token(self):
+        headers = Message()
+        unauthorized = HTTPError("https://example.test/cv/1.pdf", 401, "Unauthorized", headers, BytesIO())
+        redirect = HTTPError("https://example.test/cv/1.pdf", 302, "Found", headers, BytesIO())
+        opener = MagicMock(open=MagicMock(side_effect=redirect))
+        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", side_effect=unauthorized), patch.object(
+            tp, "build_opener", return_value=opener
+        ) as build_opener:
+            data, err = tp._download_cv("https://example.test/cv/1.pdf")
+        self.assertEqual((data, err), (None, "download_failed"))
+        self.assertTrue(build_opener.called)
+        self.assertIsInstance(build_opener.call_args.args[0], tp._NoRedirect)
 
 
 class CvExtractionTests(unittest.TestCase):

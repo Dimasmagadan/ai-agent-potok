@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 BASE_URL = os.environ.get("POTOK_BASE_URL", "").rstrip("/")
 TOKEN = os.environ.get("POTOK_API_TOKEN", "")
@@ -176,6 +176,11 @@ MAX_DOCX_XML_BYTES = 10 * 1024 * 1024
 CV_STATUSES = {"ok", "no_cv", "download_failed", "too_large", "extract_failed", "unsupported_format"}
 
 
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _cv_record(applicant_id, source_url, status, fmt, text, mock_fallback=False):
     record = {
         "applicant_id": applicant_id,
@@ -208,9 +213,10 @@ def _download_cv(url):
     if parts.scheme != "https" and not (parts.scheme == "http" and is_local):
         return None, "download_failed"
 
-    def _try(download_url):
+    def _try(download_url, allow_redirects=True):
         req = Request(download_url)
-        with urlopen(req, timeout=30) as resp:
+        opener = urlopen if allow_redirects else build_opener(_NoRedirect()).open
+        with opener(req, timeout=30) as resp:
             data = bytearray()
             while True:
                 chunk = resp.read(65536)
@@ -236,8 +242,12 @@ def _download_cv(url):
                     f"{query}{urlencode({'token': TOKEN})}",
                     parts.fragment,
                 ))
-                return _try(token_url)
-            except (HTTPError, URLError, TimeoutError):
+                # Query credentials must never be forwarded to a redirect target.
+                return _try(token_url, allow_redirects=False)
+            except HTTPError as retry_error:
+                retry_error.close()
+                return None, "download_failed"
+            except (URLError, TimeoutError):
                 return None, "download_failed"
         e.close()
         return None, "download_failed"

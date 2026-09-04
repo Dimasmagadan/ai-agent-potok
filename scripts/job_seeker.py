@@ -130,8 +130,9 @@ def _score_job(job, terms):
     for t in terms:
         term, kind = t["term"], t["kind"]
         kind_mult = 2 if kind == "original" else 1
-        for field, field_weight in (("title", 3), ("department", 2), ("description", 1)):
-            text = job.get(field) or ""
+        for field, field_weight in (("title", 3), ("department", 2), ("key_skills", 1), ("description", 1)):
+            value = job.get(field) or ""
+            text = " ".join(str(item) for item in value) if field == "key_skills" else value
             if tp._term_matches(term, set(tp._tokens(text))):
                 total += field_weight * kind_mult
                 evidence.append({"source": field, "term": term, "kind": kind, "quote": tp._find_quote(text, term)})
@@ -276,7 +277,11 @@ def _resolve_jobs(args):
     if args.fallback_v3:
         if not tp.BASE_URL or not tp.TOKEN:
             sys.exit("POTOK_BASE_URL / POTOK_API_TOKEN не заданы (нужны для --fallback-v3)")
-        return fetch_jobs_v3_fallback(OPEN_BASE_URL)
+        return fetch_jobs_v3_fallback(
+            OPEN_BASE_URL,
+            published_only=not args.internal,
+            include_private=args.include_private,
+        )
     if not OPEN_BASE_URL or not CONSTRUCTOR_ID:
         sys.exit("POTOK_OPEN_BASE_URL / POTOK_CONSTRUCTOR_ID не заданы (см. .env)")
     return fetch_jobs_constructor(OPEN_BASE_URL, CONSTRUCTOR_ID)
@@ -301,13 +306,25 @@ def main():
     p_gaps.add_argument("--jobs-file", default=None)
     p_gaps.add_argument("--fallback-v3", action="store_true")
 
+    for command in (p_list, p_match, p_gaps):
+        command.add_argument("--internal", action="store_true", help="включить неопубликованные вакансии; требует --fallback-v3")
+        command.add_argument("--include-private", action="store_true", help="включить private вакансии; требует --internal")
+
     args = parser.parse_args()
+    if args.internal and not args.fallback_v3:
+        parser.error("--internal требует --fallback-v3")
+    if args.include_private and not args.internal:
+        parser.error("--include-private требует --internal")
 
     if args.cmd == "jobs-list":
         if args.fallback_v3:
             if not tp.BASE_URL or not tp.TOKEN:
                 sys.exit("POTOK_BASE_URL / POTOK_API_TOKEN не заданы (нужны для --fallback-v3)")
-            jobs = fetch_jobs_v3_fallback(OPEN_BASE_URL)
+            jobs = fetch_jobs_v3_fallback(
+                OPEN_BASE_URL,
+                published_only=not args.internal,
+                include_private=args.include_private,
+            )
             print(json.dumps({"source": "v3_fallback", "jobs": jobs}, ensure_ascii=False, indent=2))
         else:
             if not OPEN_BASE_URL or not CONSTRUCTOR_ID:

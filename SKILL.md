@@ -117,11 +117,11 @@ Read-only, только открытый Career API — токен не нуже
    пользователю до запуска.
 2. Если сотрудник спрашивает «какие вакансии мне подходят» — запусти:
    ```bash
-   python3 scripts/job_seeker.py jobs-match '<PROFILE_JSON>' --fallback-v3 --top 10
+   python3 scripts/job_seeker.py jobs-match '<PROFILE_JSON>' --fallback-v3 --internal --top 10
    ```
 3. Если сотрудник спрашивает «чего мне не хватает для вакансии N» — запусти:
    ```bash
-   python3 scripts/job_seeker.py jobs-gaps '<PROFILE_JSON>' --job-id N --fallback-v3
+   python3 scripts/job_seeker.py jobs-gaps '<PROFILE_JSON>' --job-id N --fallback-v3 --internal
    ```
    Формулируй пробелы нейтрально («вакансия ожидает опыт от 3 лет»), не
    «вы не подходите» — та же тональность, что в Сценарии 4 SDD-C07. Поля из

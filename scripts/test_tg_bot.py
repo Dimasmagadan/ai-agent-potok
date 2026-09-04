@@ -61,6 +61,11 @@ class MatchTargetJobTests(unittest.TestCase):
         self.assertEqual(job["id"], 9)
         self.assertEqual(similar, [])
 
+    def test_matches_embedded_id(self):
+        job, similar = bot.match_target_job("вакансия 9", self.JOBS)
+        self.assertEqual(job["id"], 9)
+        self.assertEqual(similar, [])
+
     def test_matches_by_unique_title_substring(self):
         job, similar = bot.match_target_job("frontend", self.JOBS)
         self.assertEqual(job["id"], 10)
@@ -107,6 +112,7 @@ class HandleUpdateInternalModeTests(unittest.TestCase):
     def setUp(self):
         self.sent = []
         patch.object(bot, "MODE", "internal").start()
+        patch.object(bot, "ALLOWED_USER_IDS", frozenset({1, 2})).start()
         patch.object(bot, "send_message", side_effect=lambda chat_id, text: self.sent.append(text)).start()
         patch.object(bot, "get_cached_jobs", return_value=self.JOBS).start()
         self.addCleanup(patch.stopall)
@@ -121,6 +127,25 @@ class HandleUpdateInternalModeTests(unittest.TestCase):
         with patch.object(bot, "extract_profile", return_value=({"terms": [], "filters": {}}, "9", None)):
             bot.handle_update(1, "чего не хватает для вакансии 9", {}, {"jobs": None, "fetched_at": 0}, last_profile)
         self.assertIn("Вакансия: Python-разработчик (Backend)", self.sent[-1])
+
+    def test_target_question_uses_saved_profile_even_when_llm_extracts_terms(self):
+        last_profile = {1: {"terms": [{"term": "python", "kind": "original"}, {"term": "django", "kind": "original"}], "filters": {}}}
+        extracted = {"terms": [{"term": "python", "kind": "original"}], "filters": {}}
+        with patch.object(bot, "extract_profile", return_value=(extracted, "9", None)):
+            bot.handle_update(1, "чего не хватает для вакансии 9", {}, {"jobs": None, "fetched_at": 0}, last_profile)
+        self.assertEqual(last_profile[1]["terms"], [{"term": "python", "kind": "original"}, {"term": "django", "kind": "original"}])
+
+    def test_group_chat_is_rejected_before_profile_extraction(self):
+        with patch.object(bot, "extract_profile") as extract:
+            bot.handle_update(100, "я питон разработчик", {}, {"jobs": None, "fetched_at": 0}, {}, user_id=1, chat_type="group")
+        extract.assert_not_called()
+        self.assertIn("личном чате", self.sent[-1])
+
+    def test_unauthorized_user_is_rejected_before_profile_extraction(self):
+        with patch.object(bot, "extract_profile") as extract:
+            bot.handle_update(3, "я питон разработчик", {}, {"jobs": None, "fetched_at": 0}, {}, user_id=3)
+        extract.assert_not_called()
+        self.assertIn("авторизованным", self.sent[-1])
 
     def test_target_job_without_prior_profile_asks_to_describe_first(self):
         last_profile = {}
@@ -143,6 +168,15 @@ class RunStartupChecksTests(unittest.TestCase):
         with patch.object(bot, "TELEGRAM_TOKEN", "x"), patch.object(bot, "ANTHROPIC_API_KEY", "y"), patch.object(
             bot, "MODE", "internal"
         ), patch.object(bot.js.tp, "BASE_URL", ""), patch.object(bot.js.tp, "TOKEN", ""):
+            with self.assertRaises(SystemExit):
+                bot.run()
+
+    def test_internal_mode_without_allowed_users_exits_at_startup(self):
+        with patch.object(bot, "TELEGRAM_TOKEN", "x"), patch.object(bot, "ANTHROPIC_API_KEY", "y"), patch.object(
+            bot, "MODE", "internal"
+        ), patch.object(bot.js.tp, "BASE_URL", "https://api.example"), patch.object(bot.js.tp, "TOKEN", "token"), patch.object(
+            bot, "ALLOWED_USER_IDS", frozenset()
+        ):
             with self.assertRaises(SystemExit):
                 bot.run()
 
