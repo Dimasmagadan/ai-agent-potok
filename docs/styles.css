@@ -1,0 +1,291 @@
+:root {
+  --ink: #12212b;
+  --muted: #60717d;
+  --paper: #f6f3ed;
+  --line: #d8d4ca;
+  --mint: #c9e8d4;
+  --blue: #186978;
+  --orange: #f27847;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font: 16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+a {
+  color: inherit;
+}
+
+.wrap {
+  max-width: 1120px;
+  margin: auto;
+  padding: 0 clamp(1.25rem, 1.0357142857rem + 0.9523809524vw, 1.75rem);
+}
+
+nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(1.125rem, 0.9642857143rem + 0.7142857143vw, 1.5rem) 0;
+  font-size: clamp(0.8125rem, 0.7857142857rem + 0.119047619vw, 0.875rem);
+}
+
+.brand {
+  font-weight: 800;
+  text-decoration: none;
+  letter-spacing: -0.03em;
+}
+
+.brand span {
+  color: var(--blue);
+}
+
+.nav-link {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: clamp(2.125rem, -0.25rem + 5vw, 3.5rem);
+  align-items: center;
+  min-height: clamp(31.25rem, 20.4545454545rem + 22.7272727273vw, 37.5rem);
+  padding: clamp(3.125rem, 2.5892857143rem + 2.380952381vw, 4.375rem) 0 clamp(4.5rem, 3.75rem + 3.3333333333vw, 6.25rem);
+}
+
+.eyebrow, .section-label {
+  font-size: clamp(0.75rem, 0.7232142857rem + 0.119047619vw, 0.8125rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.eyebrow {
+  color: var(--blue);
+}
+
+h1 {
+  max-width: 720px;
+  margin: clamp(0.75rem, 0.6964285714rem + 0.2380952381vw, 0.875rem) 0 clamp(1.125rem, 1.0178571429rem + 0.4761904762vw, 1.375rem);
+  font-size: clamp(2.625rem, 1.7142857143rem + 4.0476190476vw, 4.75rem);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+}
+
+.lead {
+  max-width: 620px;
+  color: var(--muted);
+  font-size: clamp(1.125rem, 1.0714285714rem + 0.2380952381vw, 1.25rem);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: clamp(1.5rem, 1.2857142857rem + 0.9523809524vw, 2rem);
+}
+
+.button {
+  display: inline-block;
+  padding: 12px 18px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.button.primary {
+  color: white;
+  background: var(--ink);
+}
+
+.panel {
+  position: relative;
+  padding: clamp(1.5rem, 1.2857142857rem + 0.9523809524vw, 2rem);
+  border: 1px solid var(--ink);
+  background: var(--mint);
+  box-shadow: clamp(0.5rem, 0.3928571429rem + 0.4761904762vw, 0.75rem) clamp(0.5rem, 0.3928571429rem + 0.4761904762vw, 0.75rem) 0 var(--orange);
+}
+
+.panel h2 {
+  margin: 0 0 clamp(1rem, 0.8928571429rem + 0.4761904762vw, 1.25rem);
+  font-size: clamp(1.5rem, 1.3660714286rem + 0.5952380952vw, 1.8125rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.prompt {
+  margin: 10px 0;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border-left: 3px solid var(--blue);
+  font-size: clamp(0.8125rem, 0.7857142857rem + 0.119047619vw, 0.875rem);
+}
+
+.rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0;
+}
+
+section {
+  padding: clamp(3.75rem, 3rem + 3.3333333333vw, 5.5rem) 0;
+}
+
+.section-label {
+  color: var(--orange);
+}
+
+h2 {
+  margin: 8px 0 clamp(1.5rem, 1.3392857143rem + 0.7142857143vw, 1.875rem);
+  font-size: clamp(1.875rem, 1.4464285714rem + 1.9047619048vw, 2.875rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.75rem, 0.6428571429rem + 0.4761904762vw, 1rem);
+}
+
+.feature {
+  min-height: clamp(11.25rem, 10.4464285714rem + 3.5714285714vw, 13.125rem);
+  padding: clamp(1.25rem, 1.1428571429rem + 0.4761904762vw, 1.5rem);
+  border: 1px solid var(--line);
+  background: #fffdf8;
+}
+
+.feature:nth-child(2) {
+  background: #e7eff1;
+}
+
+.feature:nth-child(5) {
+  background: #ffe8d8;
+}
+
+.number {
+  color: var(--blue);
+  font-size: clamp(1.25rem, 1.1428571429rem + 0.4761904762vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1;
+}
+
+h3 {
+  margin: clamp(1.25rem, 1.0357142857rem + 0.9523809524vw, 1.75rem) 0 8px;
+  font-size: clamp(1rem, 0.9464285714rem + 0.2380952381vw, 1.125rem);
+  line-height: 1.2;
+}
+
+.feature p {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(0.8125rem, 0.7857142857rem + 0.119047619vw, 0.875rem);
+}
+
+.how {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: clamp(2.5rem, -0.7386363636rem + 6.8181818182vw, 4.375rem);
+  align-items: start;
+}
+
+.how p {
+  color: var(--muted);
+  font-size: clamp(1rem, 0.9464285714rem + 0.2380952381vw, 1.125rem);
+}
+
+.steps {
+  counter-reset: steps;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  position: relative;
+  padding: 0 0 clamp(1.25rem, 1.1160714286rem + 0.5952380952vw, 1.5625rem) clamp(2.625rem, 2.4107142857rem + 0.9523809524vw, 3.125rem);
+  border-left: 1px solid var(--line);
+}
+
+.steps li::before {
+  counter-increment: steps;
+  content: "0" counter(steps);
+  position: absolute;
+  left: -15px;
+  top: -3px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: white;
+  background: var(--blue);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.steps strong {
+  display: block;
+}
+
+.steps span {
+  color: var(--muted);
+  font-size: clamp(0.8125rem, 0.7857142857rem + 0.119047619vw, 0.875rem);
+}
+
+.cta {
+  padding: clamp(2rem, 1.4642857143rem + 2.380952381vw, 3.25rem);
+  color: white;
+  background: var(--ink);
+}
+
+.cta h2 {
+  max-width: 700px;
+  margin-bottom: clamp(1rem, 0.8928571429rem + 0.4761904762vw, 1.25rem);
+}
+
+.cta p {
+  max-width: 620px;
+  color: #c5d0d2;
+}
+
+.cta .button {
+  border-color: white;
+}
+
+.cta .primary {
+  color: var(--ink);
+  background: white;
+}
+
+footer {
+  padding: clamp(1.5rem, 1.2857142857rem + 0.9523809524vw, 2rem) 0 clamp(2.25rem, 1.9285714286rem + 1.4285714286vw, 3rem);
+  color: var(--muted);
+  font-size: clamp(0.75rem, 0.7232142857rem + 0.119047619vw, 0.8125rem);
+}
+
+footer a {
+  margin-right: 20px;
+}
+
+@media (max-width: 760px) {
+  .hero, .how {
+    grid-template-columns: 1fr;
+    gap: 34px;
+  }
+  .hero {
+    min-height: auto;
+  }
+  .features {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,5 +1,6 @@
 .DS_Store
 .env
+node_modules/
 __pycache__/
 .cv_cache/
 .cv_mock_fallback.json

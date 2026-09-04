@@ -1,31 +1,67 @@
-# Talent Pool: поиск по кадровому резерву + дедупликация + расширения («Поток»)
+# AI-агент для рекрутмента в «Потоке»
 
-Read-only чат-скилл для LLM поверх открытого API «Потока»
-(events.potok.io/ai_agent_hr_contest). Что и почему — [`SDD-C06-TALENT-POOL.md`](SDD-C06-TALENT-POOL.md)
-(резерв/поиск/дедуп), [`SDD-C07-REOPEN-CANDIDATES.md`](SDD-C07-REOPEN-CANDIDATES.md)
-(пересмотр прошлых кандидатов), [`SDD-C08-DELIVERY-EXTENSIONS.md`](SDD-C08-DELIVERY-EXTENSIONS.md)
-(полнотекст резюме, режим соискателя, MCP-сервер, Telegram-бот) и
-[`SDD-C09-INTERNAL-MOBILITY.md`](SDD-C09-INTERNAL-MOBILITY.md) (внутренний
-Telegram-бот для сотрудников: те же вакансии компании, включая
-неопубликованные, плюс отчёт о пробелах под конкретную вакансию). Триггер и
-инструкции для LLM — [`SKILL.md`](SKILL.md).
+[![Tests](https://github.com/Dimasmagadan/ai-agent-potok/actions/workflows/test.yml/badge.svg)](https://github.com/Dimasmagadan/ai-agent-potok/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Pages](https://img.shields.io/badge/demo-GitHub%20Pages-186978)](https://dimasmagadan.github.io/ai-agent-potok/)
 
-1. Рекрутер описывает свободным текстом, кто нужен, — скилл ищет подходящих
-   кандидатов в кадровом резерве (без активной вакансии, не нанятые), с
-   контекстным для сферы вакансии LLM-расширением запроса синонимами,
-   evidence-цитатами и, по запросу, полнотекстовым поиском по резюме.
-2. Скилл находит дубли кандидатов в базе (точное совпадение телефона/email).
-3. Скилл пересматривает прошлых (неактивных) кандидатов вакансии, когда
-   условия найма изменились (вилка, график, локация, минимальный опыт,
-   профиль) — с проверяемым evidence, а не автоматическим решением.
-4. Соискатель свободным текстом описывает себя — скилл подбирает открытые
-   вакансии компании через открытый Career API (без токена) и даёт ссылку
-   для отклика.
+Read-only AI-агент поверх API [«Потока»](https://potok.io) для рекрутёров,
+соискателей и сотрудников компании. Помогает находить кандидатов и вакансии,
+не меняя данные в ATS: не ставит теги, не пишет комментарии, не перемещает по
+воронке и не откликается за человека.
 
-Каналы доставки: чат-скилл (Claude Code и совместимые агенты), MCP-сервер
-(Claude Desktop / Cursor / любой MCP-клиент) для рекрутёра, Telegram-бот для
-соискателя. Никакой записи в «Поток» ни в одном канале: ни тегов, ни
-комментариев, ни перемещений по воронке, ни откликов за кандидата.
+Проект создан для [Potok AI Agent Challenge](https://events.potok.io/ai_agent_hr_contest)
+и работает как чат-скилл, MCP-сервер или Telegram-бот.
+
+**Витрина проекта:** <https://dimasmagadan.github.io/ai-agent-potok/>
+
+## Что умеет
+
+| Сценарий | Для кого | Результат |
+|---|---|---|
+| **Поиск в кадровом резерве** | Рекрутёр | Подходящие кандидаты без активной вакансии и без найма: свободный запрос, синонимы, ранжирование и evidence-цитаты. |
+| **Дедупликация базы** | Рекрутёр | Пары кандидатов с одинаковым нормализованным телефоном или email. |
+| **Пересмотр прошлых кандидатов** | Рекрутёр | Кандидаты, к которым стоит вернуться после изменения вилки, графика, локации, опыта или профиля. Решение остаётся за рекрутёром, все сигналы проверяемы. |
+| **Подбор вакансий** | Соискатель | Открытые вакансии из Career API, подобранные по текстовому описанию профиля, с прямой ссылкой для отклика. |
+| **Внутренняя мобильность** | Сотрудник | Подходящие, включая неопубликованные, вакансии компании и отчёт о пробелах профиля для конкретной роли. |
+
+## Каналы
+
+- **Чат-скилл**: Claude Code и совместимые LLM-агенты. Инструкции и примеры запросов: [`SKILL.md`](SKILL.md).
+- **MCP-сервер**: Claude Desktop, Cursor и любой MCP-клиент со `stdio`-транспортом; инструменты для поиска, резерва, дублей, пересмотра и вакансий.
+- **Telegram-бот**: внешний режим для соискателей и защищённый allowlist-режим для внутренней мобильности сотрудников.
+
+## Быстрый старт
+
+Никаких зависимостей кроме Python 3: fixtures позволяют проверить все основные
+сценарии локально, без токена и аккаунта «Потока».
+
+```bash
+git clone https://github.com/Dimasmagadan/ai-agent-potok.git
+cd ai-agent-potok
+make test
+make demo
+```
+
+`make demo` поднимает локальный mock API и последовательно показывает резерв,
+дубли, поиск по резюме, подбор вакансий и пересмотр кандидатов. Для ручного
+запуска и подключения к реальному тенанту используйте разделы ниже.
+
+## Возможности и границы
+
+- Только чтение данных: агент безопасен для запуска в повседневном рекрутменте.
+- Никаких внешних Python-зависимостей для основного функционала: HTTP,
+  пагинация, 429-backoff и тесты реализованы на стандартной библиотеке.
+- Полнотекстовый поиск по `.docx` и `.txt` резюме; `.pdf` поддерживается при
+  установке `pdfminer.six`.
+- Дедупликация намеренно строгая: только телефон/email, без сомнительного fuzzy
+  сопоставления ФИО.
+
+Детали решений: [`SDD-C06-TALENT-POOL.md`](SDD-C06-TALENT-POOL.md) (резерв,
+поиск, дубли), [`SDD-C07-REOPEN-CANDIDATES.md`](SDD-C07-REOPEN-CANDIDATES.md)
+(пересмотр), [`SDD-C08-DELIVERY-EXTENSIONS.md`](SDD-C08-DELIVERY-EXTENSIONS.md)
+(CV, соискатель, MCP, Telegram) и
+[`SDD-C09-INTERNAL-MOBILITY.md`](SDD-C09-INTERNAL-MOBILITY.md) (внутренняя
+мобильность).
 
 ## Запуск на fixtures (без токена, за 30 секунд)
 
@@ -50,7 +86,7 @@ python3 scripts/job_seeker.py jobs-match '{"terms":[{"term":"python","kind":"ori
 
 python3 scripts/talent_pool.py reopen '{"target_job_id":202,"source_job_id":201,"previous_criteria":{"salary_to":280000,"currency_type":"RUR","schedule_type":"fullDay","experience_minimum_years":3,"city":"1","role_terms":["python","backend"],"profile_terms_any":["django"]},"current_criteria":{"salary_to":350000,"currency_type":"RUR","schedule_type":"remote","experience_minimum_years":2,"city":"2","role_terms":["python","backend"],"profile_terms_any":["django","fastapi"]},"applicant_salary_currency":"RUR","context_terms":{"schedule":["удалённо"]},"declination_reason_mapping":{"experience_minimum":[8]}}'
 
-make test                                                  # 100 тестов ядра (stdlib unittest)
+make test                                                  # 136 тестов ядра (stdlib unittest)
 ```
 
 `reserve`, `search` и `dedup` возвращают уже собранную часть данных, если API

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Read-only AI-агент для рекрутмента в Потоке: кадровый резерв, дубли, вакансии и внутренняя мобильность.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23186978'/%3E%3Cpath d='M18 17h28v9H35v21h-9V26H18z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <title>AI-агент для рекрутмента в Потоке</title>
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="./">potok<span>/</span>agent</a>
+      <a class="nav-link" href="https://github.com/Dimasmagadan/ai-agent-potok">Репозиторий на GitHub &nearr;</a>
+    </nav>
+
+    <main>
+      <section class="hero">
+        <div>
+          <div class="eyebrow">AI Agent Challenge 2026</div>
+          <h1>Рекрутинг без лишних действий в ATS.</h1>
+          <p class="lead">AI-агент для «Потока» помогает находить кандидатов, вакансии и карьерные возможности, не меняя данные в системе.</p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/Dimasmagadan/ai-agent-potok">Открыть проект</a>
+            <a class="button" href="#start">Запустить за 30 секунд</a>
+          </div>
+        </div>
+        <aside class="panel">
+          <h2>Задайте вопрос обычным языком</h2>
+          <div class="prompt">«Найди backend-разработчиков в резерве со знанием Python и FastAPI»</div>
+          <div class="prompt">«Кого стоит пересмотреть после расширения вилки?»</div>
+          <div class="prompt">«Какие вакансии мне подходят и чего не хватает для роли №9?»</div>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <hr class="rule">
+
+  <section class="wrap">
+    <div class="section-label">Пять рабочих сценариев</div>
+    <h2>От резерва до внутренней мобильности</h2>
+    <div class="features">
+      <article class="feature"><div class="number">01</div><h3>Кадровый резерв</h3><p>Понимает запрос в свободной форме, учитывает синонимы, ранжирует кандидатов и показывает подтверждающие цитаты.</p></article>
+      <article class="feature"><div class="number">02</div><h3>Дедупликация</h3><p>Находит карточки с одинаковыми нормализованными телефоном или адресом электронной почты, без догадок по ФИО.</p></article>
+      <article class="feature"><div class="number">03</div><h3>Возврат кандидатов</h3><p>Показывает, к кому вернуться после изменения вилки, графика, локации, опыта или профиля роли.</p></article>
+      <article class="feature"><div class="number">04</div><h3>Подбор вакансий</h3><p>Соискатель описывает опыт в свободной форме и получает подходящие открытые вакансии с ссылкой для отклика.</p></article>
+      <article class="feature"><div class="number">05</div><h3>Внутренняя мобильность</h3><p>Сотрудники видят подходящие роли, включая неопубликованные, и понимают, чего может не хватать для конкретной вакансии.</p></article>
+      <article class="feature"><div class="number">&infin;</div><h3>Безопасно по умолчанию</h3><p>Только чтение: никаких тегов, комментариев, перемещений по воронке или откликов от имени человека.</p></article>
+    </div>
+  </section>
+
+  <section id="start" class="wrap how">
+    <div>
+      <div class="section-label">Быстрый старт</div>
+      <h2>Проверьте проект без доступа к API</h2>
+      <p>В репозитории есть обезличенные данные и локальная имитация API. Нужен только Python 3.</p>
+    </div>
+    <ol class="steps">
+      <li><strong>Клонируйте репозиторий</strong><span><code>git clone https://github.com/Dimasmagadan/ai-agent-potok.git</code></span></li>
+      <li><strong>Запустите тесты</strong><span><code>make test</code> запускает 136 автономных тестов без сети.</span></li>
+      <li><strong>Посмотрите демо</strong><span><code>make demo</code> последовательно показывает ключевые сценарии на локальном API.</span></li>
+    </ol>
+  </section>
+
+  <section class="wrap">
+    <div class="cta">
+      <div class="section-label">Открытый исходный код, MIT</div>
+      <h2>Подключите агента к рекрутинговым процессам.</h2>
+      <p>Используйте как чат-скилл, MCP-сервер для Claude Desktop и Cursor или Telegram-бот для соискателей и сотрудников.</p>
+      <div class="actions"><a class="button primary" href="https://github.com/Dimasmagadan/ai-agent-potok">Репозиторий на GitHub</a><a class="button" href="README.md">Документация API</a></div>
+    </div>
+  </section>
+
+  <footer class="wrap"><a href="https://github.com/Dimasmagadan/ai-agent-potok">GitHub</a><a href="https://events.potok.io/ai_agent_hr_contest">Potok AI Agent Challenge</a><a href="https://github.com/Dimasmagadan/ai-agent-potok/blob/master/LICENSE">MIT License</a></footer>
+</body>
+</html>
