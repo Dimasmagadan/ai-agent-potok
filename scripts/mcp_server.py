@@ -13,7 +13,7 @@ import job_seeker as js
 import talent_pool as tp
 
 PROTOCOL_VERSION = "2025-06-18"
-SERVER_INFO = {"name": "potok-talent-pool", "version": "1.1.1"}
+SERVER_INFO = {"name": "potok-talent-pool", "version": "1.2.0"}
 
 TOOLS = [
     {
