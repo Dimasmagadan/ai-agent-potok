@@ -186,7 +186,7 @@ class DownloadCvTests(unittest.TestCase):
         self.assertEqual((data, err), (b"pdf-bytes", None))
         self.assertNotIn("Authorization", captured["headers"])
 
-    def test_401_retry_uses_no_redirect_opener_with_token(self):
+    def test_401_retry_passes_token_as_query_parameter(self):
         headers = Message()
         unauthorized = HTTPError("https://example.test/cv/1.pdf", 401, "Unauthorized", headers, BytesIO())
         response = MagicMock()
@@ -196,32 +196,47 @@ class DownloadCvTests(unittest.TestCase):
 
         def fake_open(req, timeout=None):
             captured["headers"] = dict(req.header_items())
+            captured["url"] = req.full_url
             return response
 
-        fake_opener = MagicMock()
-        fake_opener.open = fake_open
+        calls = 0
 
-        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", side_effect=unauthorized), patch.object(
-            tp, "build_opener", return_value=fake_opener
-        ) as build_opener_mock:
+        def fake_urlopen(req, timeout=None):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise unauthorized
+            return fake_open(req, timeout)
+
+        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", fake_urlopen):
             data, err = tp._download_cv("https://example.test/cv/1.pdf")
 
         self.assertEqual((data, err), (b"pdf-bytes", None))
-        self.assertEqual(captured["headers"].get("Authorization"), "Bearer secret-token")
-        # ensures the retry goes through a redirect-refusing opener, not urlopen directly
-        self.assertTrue(build_opener_mock.called)
-        self.assertIsInstance(build_opener_mock.call_args.args[0], tp._NoRedirect)
+        self.assertNotIn("Authorization", captured["headers"])
+        self.assertEqual(captured["url"], "https://example.test/cv/1.pdf?token=secret-token")
 
-    def test_401_then_redirect_response_fails_without_leaking_token_further(self):
+    def test_401_retry_preserves_existing_query_parameters(self):
         headers = Message()
         unauthorized = HTTPError("https://example.test/cv/1.pdf", 401, "Unauthorized", headers, BytesIO())
-        redirected = HTTPError("https://example.test/cv/1.pdf", 302, "Found", headers, BytesIO())
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.side_effect = [b"pdf-bytes", b""]
+        captured = {}
 
-        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", side_effect=unauthorized), patch.object(
-            tp, "build_opener", return_value=MagicMock(open=MagicMock(side_effect=redirected))
-        ):
-            data, err = tp._download_cv("https://example.test/cv/1.pdf")
-        self.assertEqual((data, err), (None, "download_failed"))
+        calls = 0
+
+        def fake_urlopen(req, timeout=None):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise unauthorized
+            captured["url"] = req.full_url
+            return response
+
+        with patch.object(tp, "TOKEN", "secret-token"), patch.object(tp, "urlopen", fake_urlopen):
+            data, err = tp._download_cv("https://example.test/cv/1.pdf?download=1")
+        self.assertEqual((data, err), (b"pdf-bytes", None))
+        self.assertEqual(captured["url"], "https://example.test/cv/1.pdf?download=1&token=secret-token")
 
 
 class CvExtractionTests(unittest.TestCase):

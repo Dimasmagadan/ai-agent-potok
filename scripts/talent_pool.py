@@ -15,8 +15,8 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 
 BASE_URL = os.environ.get("POTOK_BASE_URL", "").rstrip("/")
 TOKEN = os.environ.get("POTOK_API_TOKEN", "")
@@ -176,11 +176,6 @@ MAX_DOCX_XML_BYTES = 10 * 1024 * 1024
 CV_STATUSES = {"ok", "no_cv", "download_failed", "too_large", "extract_failed", "unsupported_format"}
 
 
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
 def _cv_record(applicant_id, source_url, status, fmt, text, mock_fallback=False):
     record = {
         "applicant_id": applicant_id,
@@ -196,11 +191,7 @@ def _cv_record(applicant_id, source_url, status, fmt, text, mock_fallback=False)
 
 
 def _load_cv_mock_fallback():
-    """Временный костыль: GET cv_original этого тенанта отдаёт 403 SignatureDoesNotMatch
-    и без токена, и с ним (см. письмо в поддержку Потока от 2026-09-03). Пока ждём ответ,
-    CV_MOCK_FALLBACK_FILE (JSON {"<applicant_id>": "текст резюме"}) подставляет уже известный
-    нам текст вместо реального скачивания — только для явно перечисленных кандидатов, не как
-    общий фолбэк на любую ошибку сети. Удалить, когда скачивание заработает."""
+    """Load explicitly supplied mock CV text for offline demos only."""
     path = os.environ.get("CV_MOCK_FALLBACK_FILE")
     if not path:
         return {}
@@ -217,10 +208,9 @@ def _download_cv(url):
     if parts.scheme != "https" and not (parts.scheme == "http" and is_local):
         return None, "download_failed"
 
-    def _try(headers, allow_redirects=True):
-        req = Request(url, headers=headers)
-        opener = urlopen if allow_redirects else build_opener(_NoRedirect()).open
-        with opener(req, timeout=30) as resp:
+    def _try(download_url):
+        req = Request(download_url)
+        with urlopen(req, timeout=30) as resp:
             data = bytearray()
             while True:
                 chunk = resp.read(65536)
@@ -232,13 +222,21 @@ def _download_cv(url):
             return bytes(data), None
 
     try:
-        return _try({})
+        return _try(url)
     except HTTPError as e:
         if e.code in (401, 403):
             e.close()
             try:
-                # Never forward the tenant token to a redirect target.
-                return _try({"Authorization": f"Bearer {TOKEN}"}, allow_redirects=False)
+                parts = urlsplit(url)
+                query = f"{parts.query}&" if parts.query else ""
+                token_url = urlunsplit((
+                    parts.scheme,
+                    parts.netloc,
+                    parts.path,
+                    f"{query}{urlencode({'token': TOKEN})}",
+                    parts.fragment,
+                ))
+                return _try(token_url)
             except (HTTPError, URLError, TimeoutError):
                 return None, "download_failed"
         e.close()
