@@ -4,7 +4,10 @@ Read-only чат-скилл для LLM поверх открытого API «П�
 (events.potok.io/ai_agent_hr_contest). Что и почему — [`SDD-C06-TALENT-POOL.md`](SDD-C06-TALENT-POOL.md)
 (резерв/поиск/дедуп), [`SDD-C07-REOPEN-CANDIDATES.md`](SDD-C07-REOPEN-CANDIDATES.md)
 (пересмотр прошлых кандидатов), [`SDD-C08-DELIVERY-EXTENSIONS.md`](SDD-C08-DELIVERY-EXTENSIONS.md)
-(полнотекст резюме, режим соискателя, MCP-сервер, Telegram-бот). Триггер и
+(полнотекст резюме, режим соискателя, MCP-сервер, Telegram-бот) и
+[`SDD-C09-INTERNAL-MOBILITY.md`](SDD-C09-INTERNAL-MOBILITY.md) (внутренний
+Telegram-бот для сотрудников: те же вакансии компании, включая
+неопубликованные, плюс отчёт о пробелах под конкретную вакансию). Триггер и
 инструкции для LLM — [`SKILL.md`](SKILL.md).
 
 1. Рекрутер описывает свободным текстом, кто нужен, — скилл ищет подходящих
@@ -86,7 +89,7 @@ python3 scripts/talent_pool.py cv-index --reserve-file /tmp/reserve.json [--cach
 ```
 
 Скачивает `cv_original` каждого кандидата резерва (сначала без токена, при
-401/403 — с `Authorization: Bearer`), извлекает текст (`.docx` — stdlib
+401/403 — с query-параметром `?token=<POTOK_API_TOKEN>`), извлекает текст (`.docx` — stdlib
 `zipfile`+`xml.etree`, `.txt` — utf-8/cp1251, `.pdf` — только если установлен
 опциональный `pdfminer.six`) и кладёт в локальный JSON-кэш, один файл на
 кандидата. Идемпотентно: уже проиндексированный (`status: ok`, тот же
@@ -96,17 +99,12 @@ python3 scripts/talent_pool.py cv-index --reserve-file /tmp/reserve.json [--cach
 > кэша (`.cv_cache/` по умолчанию, см. `CV_CACHE_DIR`) в `.gitignore` — не
 > коммитьте и не пересылайте его.
 
-> ⚠️ **Известная проблема живого тенанта (заявка направлена в поддержку
-> Потока 2026-09-03):** `cv_original` на `demo.app.potok.io` отдаёт 403
-> `SignatureDoesNotMatch` и без токена, и с `Authorization: Bearer` —
-> скачивание реальных резюме сейчас не работает ни на песочнице, ни
-> потенциально на проде. На mock-сервере (`fixtures/`) поток A работает как
-> задумано. Пока ждём ответ поддержки, `CV_MOCK_FALLBACK_FILE` (путь к JSON
+> `CV_MOCK_FALLBACK_FILE` (путь к JSON
 > `{"<applicant_id>": "текст резюме"}`) подставляет заранее известный текст
 > вместо реального скачивания только для явно перечисленных кандидатов — не
 > общий фолбэк на любую сетевую ошибку. Использование фиксируется:
 > предупреждение в stderr и `"mock_fallback": true` в записи кэша, статус
-> при этом `ok` (текст пригоден для поиска). Убрать после ответа поддержки.
+> при этом `ok` (текст пригоден для поиска).
 
 ### Режим соискателя (поток B)
 
@@ -120,6 +118,27 @@ python3 scripts/job_seeker.py jobs-match '<PROFILE_JSON>' [--jobs-file /tmp/jobs
 отдаёт JSON конструктора карьерной страницы (тогда результат помечен
 `"source": "v3_fallback"` и требует токен). Отклик не отправляется никогда —
 только ссылка `apply_url` на страницу вакансии.
+
+### Внутренняя мобильность (C09, `jobs-gaps`)
+
+```bash
+python3 scripts/job_seeker.py jobs-gaps '<PROFILE_JSON>' --job-id 9 [--fallback-v3]
+```
+
+Отчёт о пробелах профиля относительно конкретной вакансии — симметрично
+`jobs-match`. `PROFILE_JSON` — тот же контракт `terms`/`filters`. Полный
+алгоритм и формат ответа — [`SDD-C09-INTERNAL-MOBILITY.md`](SDD-C09-INTERNAL-MOBILITY.md)
+§3. Salary-gap срабатывает только когда ожидание профиля выше максимума
+вилки вакансии; поле, не заданное ни у вакансии, ни у профиля — попадает в
+`unknown_fields`, а не в `gaps`.
+
+> **Discovery 2026-09-03:** `city` в `--fallback-v3` — сырой числовой ID
+> (`job.city`), не имя. `GET /api/v3/dictionaries/cities` не подходит (UUID,
+> другой формат). `GET /api/v3/business_units` документирует `city: {id,
+> name}` в том же числовом формате, но на песочнице `demo.app.potok.io` модуль
+> штатного расписания не содержит данных для проверки — резолв не
+> подтверждён. `city` в `--fallback-v3` поэтому всегда `None`/`filter_unknown`,
+> а не тихое несовпадение имени с числом (SDD-C09 §2 п.3, §6).
 
 ### Пересмотр прошлых кандидатов (C07 `reopen`)
 
@@ -189,17 +208,49 @@ Long polling, публичный IP/домен/webhook не нужны — ра�
 компонент проекта, требующий постоянно работающего процесса — опционален,
 демо остальных потоков не зависит от бота.
 
+#### Внутренний режим (C09, `JOB_SEEKER_MODE=internal`)
+
+```bash
+export TELEGRAM_BOT_TOKEN=...
+export ANTHROPIC_API_KEY=...
+export POTOK_BASE_URL=... POTOK_API_TOKEN=...
+export JOB_SEEKER_MODE=internal
+# export JOB_SEEKER_INCLUDE_PRIVATE=1   # см. предупреждение ниже
+python3 scripts/tg_bot.py
+```
+
+> **⚠️ Этот бот — для сотрудников компании, не для внешней аудитории.**
+> Ссылку на него распространяют закрытой рассылкой (Telegram-группа/whitelist
+> на уровне того, кому вообще выдали ссылку) — никакой авторизации на уровне
+> кода нет, круг пользователей ограничен полностью организационно. Бот
+> показывает **все** вакансии компании, включая ещё не опубликованные на
+> карьерном сайте, — не публиковать ссылку вовне.
+
+Отличия от внешнего (`external`, поведение не меняется без флага):
+источник вакансий — авторизованный `GET /api/v3/jobs` (токен компании живёт
+на сервере бота, сотрудникам не виден); второй интент диалога — «чего мне не
+хватает для вакансии N» (`jobs-gaps`); минимальная in-memory память
+последнего профиля на `chat_id` (не пишется на диск, живёт до перезаписи или
+рестарта — слабее гарантии C08 «ничего не хранится»). Без
+`POTOK_API_TOKEN`/`POTOK_BASE_URL` бот отказывается стартовать с понятной
+ошибкой. Вакансии `private: true` (конфиденциальный найм, замена действующего
+сотрудника) исключены по умолчанию — `JOB_SEEKER_INCLUDE_PRIVATE=1` включает
+их обратно, только если компания осознанно это допускает. Полный разбор
+рисков — [`SDD-C09-INTERNAL-MOBILITY.md`](SDD-C09-INTERNAL-MOBILITY.md) §8.
+
 ## Устройство
 
 - `scripts/talent_pool.py` — резерв/дедуп/поиск (+CV-полнотекст) + `reopen`,
   только stdlib (`urllib`). Пагинация (страничная и курсорная) и
   429-backoff — внутри.
-- `scripts/job_seeker.py` — режим соискателя, импортирует HTTP-обвязку и
+- `scripts/job_seeker.py` — режим соискателя (`jobs-list`/`jobs-match`) и
+  внутренней мобильности (`jobs-gaps`, C09), импортирует HTTP-обвязку и
   матчер термов из `talent_pool.py` (без копирования).
 - `scripts/mcp_server.py` — stdio MCP-сервер, импортирует функции напрямую
   (без subprocess).
 - `scripts/tg_bot.py` — Telegram-бот, raw HTTP к Anthropic Messages API (без
-  SDK) для извлечения профиля соискателя.
+  SDK) для извлечения профиля соискателя/сотрудника; режим переключается
+  `JOB_SEEKER_MODE` (`external` по умолчанию, `internal` — C09).
 - `scripts/mock_server.py` — мини-HTTP-сервер на `http.server`, отдаёт
   `fixtures/*.json` (и docx-резюме на лету) в форматах ответа v3/v2/open API.
 - `scripts/test_*.py` — тесты ядра на stdlib `unittest`, без сети.
@@ -223,10 +274,18 @@ Long polling, публичный IP/домен/webhook не нужны — ра�
   парсинг в `job_seeker._parse_open_job` (fallback — `--fallback-v3`).
 - Нет семантического поиска/embeddings, нет записи в «Поток» ни в одном
   канале (write-back отсутствует полностью).
+- `jobs-gaps` (C09) сравнивает профиль только с `title`+`key_skills`
+  вакансии, не с `description` — на реальном тенанте `key_skills` пока пуст,
+  term-gaps сводятся к токенам `title` и малоинформативны. LLM-сравнение с
+  `description` осознанно отложено до v2 (см. SDD-C09 §7).
+- `city` в `--fallback-v3` не резолвится в имя — подтверждённого источника
+  для числовых ID не нашлось при discovery 2026-09-03 (см. выше и SDD-C09
+  §2 п.3); вакансии всегда дают `filter_unknown`/`unknown_fields` по городу.
 
 Полный разбор — §5 [`SDD-C06-TALENT-POOL.md`](SDD-C06-TALENT-POOL.md), §9/§11
 [`SDD-C07-REOPEN-CANDIDATES.md`](SDD-C07-REOPEN-CANDIDATES.md), §15
-[`SDD-C08-DELIVERY-EXTENSIONS.md`](SDD-C08-DELIVERY-EXTENSIONS.md).
+[`SDD-C08-DELIVERY-EXTENSIONS.md`](SDD-C08-DELIVERY-EXTENSIONS.md), §2/§7/§8
+[`SDD-C09-INTERNAL-MOBILITY.md`](SDD-C09-INTERNAL-MOBILITY.md).
 
 ## Запуск на реальном тенанте
 
@@ -235,7 +294,9 @@ Long polling, публичный IP/домен/webhook не нужны — ра�
    песочница `https://demo.app.potok.io/api/v3`). Для `reopen` при
    нестандартном `POTOK_BASE_URL` дополнительно задать `POTOK_API_V2_BASE_URL`.
    Для потока B — `POTOK_OPEN_BASE_URL`/`POTOK_CONSTRUCTOR_ID`. Для бота —
-   `TELEGRAM_BOT_TOKEN`/`ANTHROPIC_API_KEY`.
+   `TELEGRAM_BOT_TOKEN`/`ANTHROPIC_API_KEY`. Для внутреннего режима бота
+   (C09) — `JOB_SEEKER_MODE=internal` (плюс `POTOK_API_TOKEN`/`POTOK_BASE_URL`
+   выше, без них бот откажется стартовать).
 2. Экспортировать переменные из `.env` в окружение (`set -a; source .env; set +a`
    в bash/zsh) и запускать скрипты как выше, без mock-сервера.
 

@@ -55,6 +55,43 @@ class ParseOpenJobTests(unittest.TestCase):
             jobs = js.fetch_jobs_v3_fallback("https://careers.example")
         self.assertEqual([job["id"] for job in jobs], [1, 2])
 
+    def test_v3_fallback_strips_html_description_and_reads_key_skills(self):
+        rows = [{"id": 1, "name": "One", "description": "<p>Django</p>", "key_skills": ["Django", "PostgreSQL"]}]
+        with patch.object(js.tp, "_paginate_page", return_value=iter(rows)):
+            jobs = js.fetch_jobs_v3_fallback("https://careers.example")
+        self.assertEqual(jobs[0]["description"], "Django")
+        self.assertEqual(jobs[0]["key_skills"], ["Django", "PostgreSQL"])
+
+    def test_v3_fallback_city_is_always_unresolved(self):
+        rows = [{"id": 1, "name": "One", "city": "1"}]
+        with patch.object(js.tp, "_paginate_page", return_value=iter(rows)):
+            jobs = js.fetch_jobs_v3_fallback("https://careers.example")
+        self.assertIsNone(jobs[0]["city"])
+
+    def test_v3_fallback_published_only_default_filters_unpublished(self):
+        rows = [{"id": 1, "name": "Published"}, {"id": 2, "name": "Unpublished", "career_site_published": False}]
+        with patch.object(js.tp, "_paginate_page", return_value=iter(rows)):
+            jobs = js.fetch_jobs_v3_fallback("https://careers.example")
+        self.assertEqual([j["id"] for j in jobs], [1])
+
+    def test_v3_fallback_published_only_false_keeps_unpublished(self):
+        rows = [{"id": 1, "name": "Published"}, {"id": 2, "name": "Unpublished", "career_site_published": False}]
+        with patch.object(js.tp, "_paginate_page", return_value=iter(rows)):
+            jobs = js.fetch_jobs_v3_fallback("https://careers.example", published_only=False)
+        self.assertEqual([j["id"] for j in jobs], [1, 2])
+
+    def test_v3_fallback_excludes_private_by_default(self):
+        rows = [{"id": 1, "name": "Open"}, {"id": 2, "name": "Confidential", "private": True}]
+        with patch.object(js.tp, "_paginate_page", return_value=iter(rows)):
+            jobs = js.fetch_jobs_v3_fallback("https://careers.example", published_only=False)
+        self.assertEqual([j["id"] for j in jobs], [1])
+
+    def test_v3_fallback_include_private_flag_keeps_confidential_jobs(self):
+        rows = [{"id": 1, "name": "Open"}, {"id": 2, "name": "Confidential", "private": True}]
+        with patch.object(js.tp, "_paginate_page", return_value=iter(rows)):
+            jobs = js.fetch_jobs_v3_fallback("https://careers.example", published_only=False, include_private=True)
+        self.assertEqual([j["id"] for j in jobs], [1, 2])
+
 
 class FilterTests(unittest.TestCase):
     def test_city_equality_after_casefold(self):
@@ -126,6 +163,65 @@ class MatchJobsTests(unittest.TestCase):
         profile = {"terms": [{"term": "golang", "kind": "original"}], "filters": {}}
         result = js.match_jobs(self.JOBS, profile)
         self.assertEqual(result["jobs"], [])
+
+
+class ComputeGapsTests(unittest.TestCase):
+    JOB = {
+        "id": 9,
+        "title": "Python Backend Developer",
+        "city": "Москва",
+        "schedule": "remote",
+        "salary_to": 320000,
+        "key_skills": ["Django", "PostgreSQL"],
+    }
+
+    def test_salary_gap_when_profile_asks_more_than_max(self):
+        profile = {"terms": [], "filters": {"salary_from": 400000}}
+        gaps, _ = js.compute_gaps(self.JOB, profile)
+        gap = next(g for g in gaps if g["field"] == "salary")
+        self.assertEqual(gap["job_value"], 320000)
+        self.assertEqual(gap["profile_value"], 400000)
+
+    def test_no_salary_gap_when_profile_asks_less_than_max(self):
+        profile = {"terms": [], "filters": {"salary_from": 200000}}
+        gaps, _ = js.compute_gaps(self.JOB, profile)
+        self.assertFalse(any(g["field"] == "salary" for g in gaps))
+
+    def test_salary_unknown_when_profile_silent(self):
+        gaps, unknown = js.compute_gaps(self.JOB, {"terms": [], "filters": {}})
+        self.assertIn("salary", unknown)
+        self.assertFalse(any(g["field"] == "salary" for g in gaps))
+
+    def test_salary_unknown_when_job_has_no_salary_to(self):
+        job = dict(self.JOB, salary_to=None)
+        gaps, unknown = js.compute_gaps(job, {"terms": [], "filters": {"salary_from": 100000}})
+        self.assertIn("salary", unknown)
+        self.assertFalse(any(g["field"] == "salary" for g in gaps))
+
+    def test_city_gap_on_mismatch(self):
+        gaps, _ = js.compute_gaps(self.JOB, {"terms": [], "filters": {"city": "Питер"}})
+        self.assertTrue(any(g["field"] == "city" for g in gaps))
+
+    def test_city_unknown_when_job_city_unresolved(self):
+        job = dict(self.JOB, city=None)
+        gaps, unknown = js.compute_gaps(job, {"terms": [], "filters": {"city": "Москва"}})
+        self.assertIn("city", unknown)
+        self.assertFalse(any(g["field"] == "city" for g in gaps))
+
+    def test_terms_gap_lists_missing_key_skills_and_title_tokens(self):
+        profile = {"terms": [{"term": "python", "kind": "original"}], "filters": {}}
+        gaps, _ = js.compute_gaps(self.JOB, profile)
+        gap = next(g for g in gaps if g["field"] == "terms")
+        self.assertIn("django", [m.casefold() for m in gap["missing"]])
+
+    def test_empty_gaps_when_profile_matches_everything(self):
+        profile = {
+            "terms": [{"term": "python", "kind": "original"}, {"term": "backend", "kind": "original"}, {"term": "developer", "kind": "original"}, {"term": "django", "kind": "original"}, {"term": "postgresql", "kind": "original"}],
+            "filters": {"city": "Москва", "schedule": "remote", "salary_from": 200000},
+        }
+        gaps, unknown = js.compute_gaps(self.JOB, profile)
+        self.assertEqual(gaps, [])
+        self.assertEqual(unknown, [])
 
 
 class ProfileValidationTests(unittest.TestCase):

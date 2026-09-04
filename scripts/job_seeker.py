@@ -58,28 +58,45 @@ def fetch_jobs_constructor(open_base_url, constructor_id):
     return [_parse_open_job(j, open_base_url) for j in (jobs_raw or [])]
 
 
-def fetch_jobs_v3_fallback(open_base_url):
+def fetch_jobs_v3_fallback(open_base_url, published_only=True, include_private=False):
     """Авторизованный fallback, если тенант не отдаёт JSON конструктора (SDD C08 §6.5).
 
     Поле публикации на карьерном сайте не задокументировано в docs/02-jobs.md;
     используется best-effort ключ 'career_site_published', отсутствие которого
-    трактуется как «опубликована» (не отфильтровывать вслепую).
+    трактуется как «опубликована» (не отфильтровывать вслепую). `published_only`
+    выключает этот фильтр для внутреннего режима (SDD-C09 §2 п.4) — поведение
+    по умолчанию (C08) не меняется. `private: true` вакансии исключены, если
+    не задан `include_private` (SDD-C09 §4 п.5).
+
+    `city` в `/jobs.json` — сырой числовой ID компании, а не имя (SDD-C09 §2
+    п.3). Discovery 2026-09-03 на реальном тенанте не нашёл эндпоинт, который
+    резолвит эти ID в имена: `GET /api/v3/dictionaries/cities` использует
+    другой формат ID (UUID); `GET /api/v3/business_units` документирует
+    `city: {id, name}` в том же числовом формате, но на этом тенанте модуль
+    штатного расписания не содержит данных для проверки — результат
+    неподтверждён. Поэтому `city` здесь принудительно `None` (даёт
+    `filter_unknown` в `_apply_filters`/`compute_gaps`, а не тихое
+    несовпадение имени с числом) вместо того, чтобы отдавать непроверенный ID.
     """
     jobs = []
     for j in tp._paginate_page("/jobs.json", {"by_scope": "all"}):
-        if j.get("career_site_published") is False:
+        if published_only and j.get("career_site_published") is False:
             continue
+        if j.get("private") and not include_private:
+            continue
+        description = j.get("description")
         jobs.append(
             {
                 "id": j.get("id"),
                 "title": j.get("name"),
                 "department": (j.get("company_department") or {}).get("name"),
-                "city": j.get("city"),
+                "city": None,
                 "salary_from": j.get("salary_from"),
                 "salary_to": j.get("salary_to"),
                 "currency": j.get("currency_type"),
                 "schedule": j.get("schedule_type"),
-                "description": None,
+                "description": _strip_html(description) if description else None,
+                "key_skills": j.get("key_skills") or [],
                 "apply_url": f"{open_base_url}/jobs/{j.get('id')}" if open_base_url and j.get("id") is not None else None,
             }
         )
@@ -176,6 +193,95 @@ def match_jobs(jobs, profile, top=10):
     }
 
 
+def compute_gaps(job, profile):
+    """Пробелы профиля относительно требований вакансии (SDD-C09 §3).
+
+    Направление salary-gap совпадает с `_apply_filters`: gap только когда
+    ожидание профиля (salary_from) выше максимума вилки вакансии (salary_to).
+    Поле, не заданное ни у вакансии, ни у профиля — unknown, а не gap.
+    """
+    filters = profile.get("filters") or {}
+    terms = profile.get("terms") or []
+    gaps = []
+    unknown_fields = []
+
+    salary_to, salary_from = job.get("salary_to"), filters.get("salary_from")
+    if salary_to is None or salary_from is None:
+        unknown_fields.append("salary")
+    elif salary_from > salary_to:
+        gaps.append(
+            {
+                "field": "salary",
+                "job_value": salary_to,
+                "profile_value": salary_from,
+                "message": f"вилка вакансии до {salary_to}, вы указали ожидание от {salary_from}",
+            }
+        )
+
+    job_city, filter_city = job.get("city"), filters.get("city")
+    if not job_city or not filter_city:
+        unknown_fields.append("city")
+    elif job_city.casefold() != filter_city.casefold():
+        gaps.append(
+            {
+                "field": "city",
+                "job_value": job_city,
+                "profile_value": filter_city,
+                "message": f"вакансия в городе {job_city}, вы указали {filter_city}",
+            }
+        )
+
+    job_schedule, filter_schedule = job.get("schedule"), filters.get("schedule")
+    if not job_schedule or not filter_schedule:
+        unknown_fields.append("schedule")
+    elif job_schedule != filter_schedule:
+        gaps.append(
+            {
+                "field": "schedule",
+                "job_value": job_schedule,
+                "profile_value": filter_schedule,
+                "message": f"формат вакансии {job_schedule}, вы указали {filter_schedule}",
+            }
+        )
+
+    profile_haystack = set()
+    for t in terms:
+        profile_haystack |= set(tp._tokens(t["term"]))
+    job_terms = list(job.get("key_skills") or []) + tp._tokens(job.get("title") or "")
+    missing, seen = [], set()
+    for jt in job_terms:
+        key = jt.casefold() if isinstance(jt, str) else jt
+        if not jt or key in seen:
+            continue
+        seen.add(key)
+        if not tp._term_matches(jt, profile_haystack):
+            missing.append(jt)
+    if missing:
+        gaps.append(
+            {
+                "field": "terms",
+                "missing": missing,
+                "message": f"в требованиях вакансии есть {', '.join(missing)}, в вашем профиле не найдено",
+            }
+        )
+
+    return gaps, unknown_fields
+
+
+def _resolve_jobs(args):
+    if args.jobs_file:
+        with open(args.jobs_file, encoding="utf-8") as f:
+            jobs = json.load(f)
+        return jobs.get("jobs", []) if isinstance(jobs, dict) else jobs
+    if args.fallback_v3:
+        if not tp.BASE_URL or not tp.TOKEN:
+            sys.exit("POTOK_BASE_URL / POTOK_API_TOKEN не заданы (нужны для --fallback-v3)")
+        return fetch_jobs_v3_fallback(OPEN_BASE_URL)
+    if not OPEN_BASE_URL or not CONSTRUCTOR_ID:
+        sys.exit("POTOK_OPEN_BASE_URL / POTOK_CONSTRUCTOR_ID не заданы (см. .env)")
+    return fetch_jobs_constructor(OPEN_BASE_URL, CONSTRUCTOR_ID)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -188,6 +294,12 @@ def main():
     p_match.add_argument("--jobs-file", default=None, help="JSON-файл со списком вакансий (вывод jobs-list); иначе запрашивается заново")
     p_match.add_argument("--top", type=int, default=10)
     p_match.add_argument("--fallback-v3", action="store_true")
+
+    p_gaps = sub.add_parser("jobs-gaps", help="отчёт о пробелах профиля для конкретной вакансии (см. SDD-C09 §3)")
+    p_gaps.add_argument("profile_json", help='PROFILE_JSON: {"terms":[...], "filters": {...}} (см. SDD §6.2)')
+    p_gaps.add_argument("--job-id", type=int, required=True)
+    p_gaps.add_argument("--jobs-file", default=None)
+    p_gaps.add_argument("--fallback-v3", action="store_true")
 
     args = parser.parse_args()
 
@@ -206,20 +318,25 @@ def main():
         profile = json.loads(args.profile_json)
         if not validate_profile(profile):
             sys.exit("PROFILE_JSON имеет неверную структуру")
-        if args.jobs_file:
-            with open(args.jobs_file, encoding="utf-8") as f:
-                jobs = json.load(f)
-            if isinstance(jobs, dict):
-                jobs = jobs.get("jobs", [])
-        elif args.fallback_v3:
-            if not tp.BASE_URL or not tp.TOKEN:
-                sys.exit("POTOK_BASE_URL / POTOK_API_TOKEN не заданы (нужны для --fallback-v3)")
-            jobs = fetch_jobs_v3_fallback(OPEN_BASE_URL)
-        else:
-            if not OPEN_BASE_URL or not CONSTRUCTOR_ID:
-                sys.exit("POTOK_OPEN_BASE_URL / POTOK_CONSTRUCTOR_ID не заданы (см. .env)")
-            jobs = fetch_jobs_constructor(OPEN_BASE_URL, CONSTRUCTOR_ID)
+        jobs = _resolve_jobs(args)
         print(json.dumps(match_jobs(jobs, profile, args.top), ensure_ascii=False, indent=2))
+    elif args.cmd == "jobs-gaps":
+        profile = json.loads(args.profile_json)
+        if not validate_profile(profile):
+            sys.exit("PROFILE_JSON имеет неверную структуру")
+        jobs = _resolve_jobs(args)
+        job = next((j for j in jobs if j.get("id") == args.job_id), None)
+        if job is None:
+            print(json.dumps({"error": "job_not_found"}, ensure_ascii=False))
+            return
+        gaps, unknown_fields = compute_gaps(job, profile)
+        print(
+            json.dumps(
+                {"job": {"id": job["id"], "title": job.get("title")}, "gaps": gaps, "unknown_fields": unknown_fields},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Telegram-бот соискателя: long polling, извлечение профиля через Anthropic API, jobs-match.
+"""Telegram-бот соискателя/сотрудника: long polling, извлечение профиля через Anthropic API,
+jobs-match / jobs-gaps.
 
-См. SDD-C08-DELIVERY-EXTENSIONS.md §9. Stdlib-only (urllib/json/time). Бот stateless:
-история между сообщениями не хранится ни в памяти, ни на диске. Текст сообщений
-пользователей не логируется — только chat_id, timestamp, статус обработки.
+Внешний режим (по умолчанию, `JOB_SEEKER_MODE=external`) — см. SDD-C08-DELIVERY-EXTENSIONS.md §9,
+stateless, только опубликованные вакансии карьерного сайта. Внутренний режим
+(`JOB_SEEKER_MODE=internal`) — см. SDD-C09-INTERNAL-MOBILITY.md §4: авторизованный источник
+вакансий компании (включая неопубликованные, кроме `private`), второй интент «чего не хватает
+для вакансии N» и минимальная in-memory память последнего профиля на chat_id (см. §4 п.4).
+Stdlib-only (urllib/json/time). Текст сообщений пользователей не логируется — только chat_id,
+timestamp, статус обработки.
 """
 import json
 import os
@@ -19,6 +24,9 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 API_BASE = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
+MODE = os.environ.get("JOB_SEEKER_MODE", "external")
+INCLUDE_PRIVATE = os.environ.get("JOB_SEEKER_INCLUDE_PRIVATE") == "1"
+
 MAX_TEXT_LEN = 1000
 RATE_LIMIT_SECONDS = 5
 JOBS_CACHE_TTL = 600
@@ -30,12 +38,23 @@ START_MESSAGE = (
     "и не отправляю отклик за вас: ссылка ведёт на страницу вакансии, откликаетесь вы сами."
 )
 
+START_MESSAGE_INTERNAL = (
+    "Привет! Я бот компании для внутренней мобильности — только для сотрудников, ссылку на меня "
+    "не пересылайте вовне. Опишите свободным текстом себя (роль, навыки, город, формат работы) — "
+    "и я покажу подходящие вакансии компании, включая ещё не опубликованные на карьерном сайте. "
+    "Можно спросить «чего мне не хватает для вакансии N» — сравню её требования с вашим профилем. "
+    "Текст ваших сообщений отправляется в Anthropic API для извлечения профиля."
+)
+
 PROFILE_SYSTEM_PROMPT = """Ты извлекаешь профиль соискателя из свободного текста для поиска вакансий.
 Верни СТРОГО один JSON-объект без пояснений в формате:
-{"terms": [{"term": "...", "kind": "original"|"synonym"}, ...], "filters": {"city": "...", "schedule": "...", "salary_from": 0}}
+{"terms": [{"term": "...", "kind": "original"|"synonym"}, ...], "filters": {"city": "...", "schedule": "...", "salary_from": 0}, "target_job": "..."}
 "terms" — роль, навыки, ключевые слова из текста кандидата (kind=original) плюс контекстные
 синонимы (kind=synonym), например "питон"->"python", "джун"->"junior". "filters" содержит только
-явно упомянутые поля; неизвестное поле не включай вовсе. Никаких полей кроме terms и filters."""
+явно упомянутые поля; неизвестное поле не включай вовсе. "target_job" — опциональное поле: номер
+или название вакансии, если человек спросил, чего ему не хватает для конкретной вакансии
+(например "чего не хватает для вакансии 9" или "для позиции бэкендера"); не включай это поле,
+если вакансия не упомянута. Никаких полей кроме terms, filters и target_job."""
 
 
 def call_llm_messages(messages, system, api_key):
@@ -66,16 +85,27 @@ def _text_of(resp):
     return "".join(b.get("text", "") for b in resp.get("content", []) if b.get("type") == "text")
 
 
+def _split_target_job(raw):
+    """Отделяет опциональный target_job от структуры профиля {terms, filters} (SDD-C09 §4 п.3)."""
+    target_job = raw.pop("target_job", None) if isinstance(raw, dict) else None
+    if not isinstance(target_job, str) or not target_job.strip():
+        target_job = None
+    return raw, target_job
+
+
 def extract_profile(user_text, api_key):
-    """Возвращает (profile_dict|None, refusal_code|None). refusal_code: "refusal" | "parse_failed"."""
+    """Возвращает (profile_dict|None, target_job|None, refusal_code|None).
+
+    refusal_code: "refusal" | "parse_failed".
+    """
     messages = [{"role": "user", "content": user_text}]
     resp = call_llm_messages(messages, PROFILE_SYSTEM_PROMPT, api_key)
     if resp.get("stop_reason") == "refusal":
-        return None, "refusal"
+        return None, None, "refusal"
     try:
-        profile = extract_json_object(_text_of(resp))
+        profile, target_job = _split_target_job(extract_json_object(_text_of(resp)))
         if js.validate_profile(profile):
-            return profile, None
+            return profile, target_job, None
     except ValueError:
         pass
 
@@ -83,14 +113,14 @@ def extract_profile(user_text, api_key):
     messages.append({"role": "user", "content": "Ответ не распарсился как JSON. Верни строго один JSON-объект без пояснений."})
     resp2 = call_llm_messages(messages, PROFILE_SYSTEM_PROMPT, api_key)
     if resp2.get("stop_reason") == "refusal":
-        return None, "refusal"
+        return None, None, "refusal"
     try:
-        profile = extract_json_object(_text_of(resp2))
+        profile, target_job = _split_target_job(extract_json_object(_text_of(resp2)))
         if js.validate_profile(profile):
-            return profile, None
+            return profile, target_job, None
     except ValueError:
         pass
-    return None, "parse_failed"
+    return None, None, "parse_failed"
 
 
 def is_rate_limited(last_ts_map, chat_id, now):
@@ -118,6 +148,39 @@ def format_jobs_plain(match_result, jobs_by_id):
     return "\n".join(lines) if lines else "Подходящих вакансий по вашему описанию не нашлось."
 
 
+def match_target_job(target_job, jobs):
+    """Сопоставляет target_job (свободный текст от LLM) со списком вакансий по id/подстроке title.
+
+    Возвращает (job|None, similar_jobs). При однозначном совпадении job задан. При нескольких
+    вариантах или отсутствии совпадений job is None, similar_jobs — кандидаты по названию
+    (SDD-C09 §4 п.3).
+    """
+    if not target_job:
+        return None, []
+    query = target_job.strip().casefold()
+    if query.isdigit():
+        job = next((j for j in jobs if str(j.get("id")) == query), None)
+        if job is not None:
+            return job, []
+    candidates = [j for j in jobs if query in (j.get("title") or "").casefold()]
+    if len(candidates) == 1:
+        return candidates[0], []
+    return None, candidates
+
+
+def format_gaps_plain(gaps_result):
+    job = gaps_result["job"]
+    lines = [f"Вакансия: {job.get('title')} (id={job.get('id')})"]
+    if gaps_result["gaps"]:
+        for g in gaps_result["gaps"]:
+            lines.append(f"— {g['message']}")
+    else:
+        lines.append("Вы подходите по всем проверяемым критериям.")
+    if gaps_result["unknown_fields"]:
+        lines.append("Не удалось сравнить (нет данных): " + ", ".join(gaps_result["unknown_fields"]) + ".")
+    return "\n".join(lines)
+
+
 def get_updates(offset):
     url = f"{API_BASE}/getUpdates?" + urlencode({"timeout": 50, "offset": offset})
     with urlopen(url, timeout=60) as resp:
@@ -140,16 +203,19 @@ def _log(chat_id, status):
 
 def get_cached_jobs(cache, now):
     if cache["jobs"] is None or now - cache["fetched_at"] > JOBS_CACHE_TTL:
-        cache["jobs"] = js.fetch_jobs_constructor(js.OPEN_BASE_URL, js.CONSTRUCTOR_ID)
+        if MODE == "internal":
+            cache["jobs"] = js.fetch_jobs_v3_fallback(js.OPEN_BASE_URL, published_only=False, include_private=INCLUDE_PRIVATE)
+        else:
+            cache["jobs"] = js.fetch_jobs_constructor(js.OPEN_BASE_URL, js.CONSTRUCTOR_ID)
         cache["fetched_at"] = now
     return cache["jobs"]
 
 
-def handle_update(chat_id, text, last_request_ts, jobs_cache):
+def handle_update(chat_id, text, last_request_ts, jobs_cache, last_profile):
     now = time.time()
 
     if text.strip() == "/start":
-        send_message(chat_id, START_MESSAGE)
+        send_message(chat_id, START_MESSAGE_INTERNAL if MODE == "internal" else START_MESSAGE)
         _log(chat_id, "start")
         return
 
@@ -165,7 +231,7 @@ def handle_update(chat_id, text, last_request_ts, jobs_cache):
     last_request_ts[chat_id] = now
 
     try:
-        profile, refusal = extract_profile(text, ANTHROPIC_API_KEY)
+        profile, target_job, refusal = extract_profile(text, ANTHROPIC_API_KEY)
     except (HTTPError, URLError, TimeoutError):
         send_message(chat_id, "LLM сейчас недоступен, попробуйте позже.")
         _log(chat_id, "llm_unavailable")
@@ -180,6 +246,18 @@ def handle_update(chat_id, text, last_request_ts, jobs_cache):
         _log(chat_id, "parse_failed")
         return
 
+    if MODE == "internal":
+        # Диалог двухшаговый (резюме → «чего не хватает для вакансии N»); без памяти
+        # второе сообщение считало бы пробелом всё подряд (SDD-C09 §4 п.4).
+        if not profile["terms"] and not profile.get("filters") and target_job:
+            profile = last_profile.get(chat_id)
+            if profile is None:
+                send_message(chat_id, "Сначала опишите, пожалуйста, себя — роль, навыки, опыт — а потом спрашивайте про конкретную вакансию.")
+                _log(chat_id, "no_profile_for_gaps")
+                return
+        else:
+            last_profile[chat_id] = profile
+
     try:
         jobs = get_cached_jobs(jobs_cache, now)
     except tp_fetch_errors():
@@ -187,9 +265,23 @@ def handle_update(chat_id, text, last_request_ts, jobs_cache):
         _log(chat_id, "jobs_unavailable")
         return
 
+    similar = []
+    if MODE == "internal" and target_job:
+        matched_job, similar = match_target_job(target_job, jobs)
+        if matched_job is not None:
+            gaps, unknown_fields = js.compute_gaps(matched_job, profile)
+            gaps_result = {"job": {"id": matched_job["id"], "title": matched_job.get("title")}, "gaps": gaps, "unknown_fields": unknown_fields}
+            send_message(chat_id, format_gaps_plain(gaps_result))
+            _log(chat_id, "gaps")
+            return
+
     result = js.match_jobs(jobs, profile)
     jobs_by_id = {j["id"]: j for j in jobs}
-    send_message(chat_id, format_jobs_plain(result, jobs_by_id))
+    text_out = format_jobs_plain(result, jobs_by_id)
+    if MODE == "internal" and target_job and similar:
+        titles = "; ".join(f"{j.get('title')} (id={j['id']})" for j in similar)
+        text_out += f"\n\nНе удалось однозначно определить вакансию «{target_job}». Похожие по названию: {titles}."
+    send_message(chat_id, text_out)
     _log(chat_id, "matched")
 
 
@@ -204,10 +296,13 @@ def run():
         sys.exit("TELEGRAM_BOT_TOKEN не задан")
     if not ANTHROPIC_API_KEY:
         sys.exit("ANTHROPIC_API_KEY не задан")
+    if MODE == "internal" and (not js.tp.BASE_URL or not js.tp.TOKEN):
+        sys.exit("JOB_SEEKER_MODE=internal требует POTOK_BASE_URL и POTOK_API_TOKEN")
 
     last_update_id = 0
     last_request_ts = {}
     jobs_cache = {"jobs": None, "fetched_at": 0}
+    last_profile = {}
 
     while True:
         try:
@@ -221,7 +316,7 @@ def run():
             msg = upd.get("message") or {}
             if "text" not in msg:
                 continue
-            handle_update(msg["chat"]["id"], msg["text"], last_request_ts, jobs_cache)
+            handle_update(msg["chat"]["id"], msg["text"], last_request_ts, jobs_cache, last_profile)
 
 
 if __name__ == "__main__":
