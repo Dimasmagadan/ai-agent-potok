@@ -365,9 +365,9 @@ make mcpb
 
 GitHub Actions запускает тесты при каждом push и pull request. Это CLI-скилл,
 поэтому серверный deploy не требуется: релиз — публичный Git-тег с исходным
-кодом, fixtures и этой инструкцией. Для `v1.1.0` приложите созданный
+кодом, fixtures и этой инструкцией. Для `v1.1.1` приложите созданный
 `dist/potok-recruiting-agent.mcpb`; текст релиз-нотов лежит в
-[`RELEASE-NOTES-v1.1.0.md`](RELEASE-NOTES-v1.1.0.md).
+[`RELEASE-NOTES-v1.1.1.md`](RELEASE-NOTES-v1.1.1.md).
 
 ## Лицензия
 

@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "potok-talent-pool",
   "display_name": "Potok Recruiting Agent",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Read-only recruiting tools for Potok. Demo mode uses synthetic fixtures, not company data.",
   "author": {
     "name": "Dmitrey Dyakonov",
