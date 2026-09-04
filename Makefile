@@ -1,10 +1,26 @@
-.PHONY: test demo
+MCPB_VERSION := 2.1.2
+MCPB_STAGE := dist/mcpb
+MCPB_ARCHIVE := dist/potok-recruiting-agent.mcpb
+
+.PHONY: test demo mcpb
 
 test:
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_talent_pool.py
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_job_seeker.py
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_mcp_server.py
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_mcpb_entry.py
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_tg_bot.py
+
+mcpb:
+	rm -rf $(MCPB_STAGE) $(MCPB_ARCHIVE)
+	mkdir -p $(MCPB_STAGE)/scripts $(MCPB_STAGE)/fixtures
+	cp manifest.json LICENSE $(MCPB_STAGE)/
+	cp scripts/mcpb_entry.py scripts/mcp_server.py scripts/talent_pool.py scripts/job_seeker.py scripts/mock_server.py $(MCPB_STAGE)/scripts/
+	cp fixtures/*.json $(MCPB_STAGE)/fixtures/
+	npx --yes @anthropic-ai/mcpb@$(MCPB_VERSION) validate $(MCPB_STAGE)/manifest.json
+	npx --yes @anthropic-ai/mcpb@$(MCPB_VERSION) pack $(MCPB_STAGE) $(MCPB_ARCHIVE)
+	unzip -l $(MCPB_ARCHIVE)
+	@! unzip -l $(MCPB_ARCHIVE) | rtk rg '(^|/)(\.env|tg_bot|research|test_)'
 
 demo:
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/mock_server.py & server_pid=$$!; trap 'kill $$server_pid' EXIT; sleep 1; \

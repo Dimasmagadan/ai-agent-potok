@@ -1,0 +1,75 @@
+{
+  "manifest_version": "0.3",
+  "name": "potok-talent-pool",
+  "display_name": "Potok Recruiting Agent",
+  "version": "1.1.0",
+  "description": "Read-only recruiting tools for Potok. Demo mode uses synthetic fixtures, not company data.",
+  "author": {
+    "name": "Dmitrey Dyakonov",
+    "url": "https://github.com/Dimasmagadan"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dimasmagadan/ai-agent-potok.git"
+  },
+  "homepage": "https://dimasmagadan.github.io/ai-agent-potok/",
+  "support": "https://github.com/Dimasmagadan/ai-agent-potok/issues",
+  "license": "MIT",
+  "tools_generated": true,
+  "server": {
+    "type": "python",
+    "entry_point": "scripts/mcpb_entry.py",
+    "mcp_config": {
+      "command": "python3",
+      "args": ["${__dirname}/scripts/mcpb_entry.py"],
+      "env": {
+        "POTOK_DEMO_MODE": "${user_config.demo_mode}",
+        "POTOK_BASE_URL": "${user_config.potok_base_url}",
+        "POTOK_API_TOKEN": "${user_config.potok_api_token}",
+        "POTOK_API_V2_BASE_URL": "${user_config.potok_api_v2_base_url}",
+        "POTOK_OPEN_BASE_URL": "${user_config.potok_open_base_url}",
+        "POTOK_CONSTRUCTOR_ID": "${user_config.potok_constructor_id}"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin"],
+    "runtimes": {
+      "python": ">=3.9"
+    }
+  },
+  "user_config": {
+    "demo_mode": {
+      "type": "boolean",
+      "title": "Demo mode",
+      "description": "Use self-contained synthetic fixtures; real tenant settings are ignored.",
+      "default": true
+    },
+    "potok_base_url": {
+      "type": "string",
+      "title": "Potok v3 URL",
+      "description": "Required when demo mode is disabled."
+    },
+    "potok_api_token": {
+      "type": "string",
+      "title": "Potok API token",
+      "description": "Required when demo mode is disabled.",
+      "sensitive": true
+    },
+    "potok_api_v2_base_url": {
+      "type": "string",
+      "title": "Potok v2 URL",
+      "description": "Optional v2 endpoint for reconsidering past candidates."
+    },
+    "potok_open_base_url": {
+      "type": "string",
+      "title": "Potok Career API URL",
+      "description": "Optional public Career API endpoint for job matching."
+    },
+    "potok_constructor_id": {
+      "type": "string",
+      "title": "Potok Career constructor ID",
+      "description": "Optional Career API constructor identifier for job matching."
+    }
+  }
+}

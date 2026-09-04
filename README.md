@@ -14,6 +14,22 @@ Read-only AI-агент поверх API [«Потока»](https://potok.io) д
 
 **Витрина проекта:** <https://dimasmagadan.github.io/ai-agent-potok/>
 
+## Установка в Claude Desktop
+
+1. Скачайте `potok-recruiting-agent.mcpb` из последнего GitHub Release.
+2. Откройте файл двойным кликом либо выберите `Settings -> Extensions -> Advanced settings -> Install Extension`.
+3. Оставьте «Демо-режим» включённым и нажмите `Install`.
+
+Демо самодостаточно: используются синтетические fixtures, поэтому не нужны
+токен «Потока», clone репозитория или отдельный mock API. Агент только читает
+данные, а демо-результаты не относятся к реальной компании.
+
+Для реального тенанта выключите «Демо-режим» в настройках расширения и введите
+v3 URL и API-токен. URL v2, Career API и ID конструктора нужны только
+соответствующим инструментам. Требования MCPB: macOS и Python 3.9+ (`python3`,
+доступный Claude Desktop). Unsigned MVP при необходимости устанавливается через
+`Settings -> Extensions -> Advanced settings`.
+
 ## Что умеет
 
 | Сценарий | Для кого | Результат |
@@ -30,7 +46,7 @@ Read-only AI-агент поверх API [«Потока»](https://potok.io) д
 - **MCP-сервер**: Claude Desktop, Cursor и любой MCP-клиент со `stdio`-транспортом; инструменты для поиска, резерва, дублей, пересмотра и вакансий.
 - **Telegram-бот**: внешний режим для соискателей и защищённый allowlist-режим для внутренней мобильности сотрудников.
 
-## Быстрый старт
+## Быстрый старт для разработки
 
 Никаких зависимостей кроме Python 3: fixtures позволяют проверить все основные
 сценарии локально, без токена и аккаунта «Потока».
@@ -194,8 +210,9 @@ python3 scripts/talent_pool.py reopen '<REQUEST_JSON>' --top 20
 
 `scripts/mcp_server.py` — stdio JSON-RPC 2.0 сервер, инструменты
 `potok_reserve`, `potok_search`, `potok_dedup`, `potok_reopen`,
-`potok_jobs_match`. Подключение в Claude Desktop (`claude_desktop_config.json`)
-или Cursor:
+`potok_jobs_match`. Для Claude Desktop используйте MCP Bundle из раздела
+«Установка в Claude Desktop» выше. Ручная конфигурация ниже остаётся fallback
+для Cursor и клиентов без MCPB:
 
 ```json
 {
@@ -343,11 +360,14 @@ python3 scripts/tg_bot.py
 ```bash
 make test
 make demo
+make mcpb
 ```
 
 GitHub Actions запускает тесты при каждом push и pull request. Это CLI-скилл,
 поэтому серверный deploy не требуется: релиз — публичный Git-тег с исходным
-кодом, fixtures и этой инструкцией.
+кодом, fixtures и этой инструкцией. Для `v1.1.0` приложите созданный
+`dist/potok-recruiting-agent.mcpb`; текст релиз-нотов лежит в
+[`RELEASE-NOTES-v1.1.0.md`](RELEASE-NOTES-v1.1.0.md).
 
 ## Лицензия
 

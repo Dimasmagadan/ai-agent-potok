@@ -8,3 +8,5 @@ research/pains-v2/evidence.private.jsonl
 research/SDD-PAIN-RESEARCH-V2.md
 research/pains-v2/
 .playwright-mcp
+dist/
+*.mcpb
