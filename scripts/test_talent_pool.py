@@ -73,6 +73,24 @@ class FindJobsByNameTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             tp.find_jobs_by_name(self.JOBS, "   ")
 
+    def test_top_limits_ranked_results(self):
+        res = tp.find_jobs_by_name(self.JOBS, "python backend developer", top=2)
+        self.assertEqual([r["id"] for r in res], [201, 202])
+
+    def test_top_none_returns_all(self):
+        res = tp.find_jobs_by_name(self.JOBS, "python backend developer", top=None)
+        self.assertEqual([r["id"] for r in res], [201, 202, 101])
+
+    def test_invalid_top_raises(self):
+        for bad in (0, -1, True, "10"):
+            with self.assertRaises(ValueError):
+                tp.find_jobs_by_name(self.JOBS, "разработчик", top=bad)
+
+    def test_job_without_id_is_skipped(self):
+        jobs = self.JOBS + [{"name": "Разработчик без ID"}]
+        res = tp.find_jobs_by_name(jobs, "разработчик")
+        self.assertEqual({r["id"] for r in res}, {101, 102})
+
 
 class SearchReserveTests(unittest.TestCase):
     RESERVE = [

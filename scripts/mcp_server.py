@@ -146,7 +146,8 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "pattern": ".*\\S.*", "description": "Название или его часть, например 'разработчик'."}
+                "query": {"type": "string", "pattern": ".*\\S.*", "description": "Название или его часть, например 'разработчик'."},
+                "top": {"type": "integer", "minimum": 1, "description": "Максимальное число совпадений, по умолчанию 20."},
             },
             "required": ["query"],
             "additionalProperties": False,
@@ -235,7 +236,12 @@ def _tool_reopen(args):
 
 def _tool_jobs_find(args):
     warnings = []
-    return tp.find_jobs_by_name(tp.all_jobs(warnings), args["query"])
+    matches = tp.find_jobs_by_name(tp.all_jobs(warnings), args["query"], top=args.get("top", 20))
+    if warnings and not matches:
+        # выборка вакансий не удалась целиком — пустой список был бы неотличим
+        # от «совпадений нет», поэтому отдаём ошибку, а не вводящий в заблуждение [].
+        raise tp.FetchError("; ".join(warnings))
+    return {"matches": matches, "warnings": warnings}
 
 
 def _tool_jobs_match(args):
@@ -259,7 +265,7 @@ def _validate_tool_arguments(name, args):
         "potok_search": {"terms", "cv"},
         "potok_dedup": set(),
         "potok_reopen": {"request", "top"},
-        "potok_jobs_find": {"query"},
+        "potok_jobs_find": {"query", "top"},
         "potok_jobs_match": {"profile", "top"},
     }[name]
     if set(args) - allowed:

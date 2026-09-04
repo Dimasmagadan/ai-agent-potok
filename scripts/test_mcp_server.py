@@ -3,6 +3,7 @@
 
 Запуск: python3 scripts/test_mcp_server.py
 """
+import json
 import unittest
 from unittest.mock import patch
 
@@ -97,12 +98,61 @@ class ToolCallTests(unittest.TestCase):
                 {"jsonrpc": "2.0", "id": 20, "method": "tools/call", "params": {"name": "potok_jobs_find", "arguments": {"query": "разработчик"}}}
             )
         self.assertFalse(resp["result"]["isError"])
-        self.assertIn('"id": 101', resp["result"]["content"][0]["text"])
+        body = json.loads(resp["result"]["content"][0]["text"])
+        self.assertEqual(body["warnings"], [])
+        self.assertEqual([m["id"] for m in body["matches"]], [101])
 
     def test_jobs_find_empty_query_is_error_without_hitting_network(self):
         with patch.object(tp, "all_jobs", side_effect=AssertionError("should not be called")):
             resp = srv.handle_message(
                 {"jsonrpc": "2.0", "id": 21, "method": "tools/call", "params": {"name": "potok_jobs_find", "arguments": {"query": "   "}}}
+            )
+        self.assertTrue(resp["result"]["isError"])
+
+    def test_jobs_find_fetch_failure_is_error_not_empty_list(self):
+        def fake_all_jobs(warnings):
+            warnings.append("/jobs.json: HTTP 500")
+            return []
+
+        with patch.object(tp, "all_jobs", side_effect=fake_all_jobs):
+            resp = srv.handle_message(
+                {"jsonrpc": "2.0", "id": 22, "method": "tools/call", "params": {"name": "potok_jobs_find", "arguments": {"query": "разработчик"}}}
+            )
+        self.assertTrue(resp["result"]["isError"])
+        self.assertIn("/jobs.json", resp["result"]["content"][0]["text"])
+
+    def test_jobs_find_partial_warnings_are_returned_with_matches(self):
+        jobs = [{"id": 101, "name": "Backend-разработчик (Java)"}]
+
+        def fake_all_jobs(warnings):
+            warnings.append("/jobs.json: HTTP 429")
+            return jobs
+
+        with patch.object(tp, "all_jobs", side_effect=fake_all_jobs):
+            resp = srv.handle_message(
+                {"jsonrpc": "2.0", "id": 23, "method": "tools/call", "params": {"name": "potok_jobs_find", "arguments": {"query": "разработчик"}}}
+            )
+        self.assertFalse(resp["result"]["isError"])
+        body = json.loads(resp["result"]["content"][0]["text"])
+        self.assertEqual([m["id"] for m in body["matches"]], [101])
+        self.assertEqual(body["warnings"], ["/jobs.json: HTTP 429"])
+
+    def test_jobs_find_top_limits_and_rejects_invalid(self):
+        jobs = [
+            {"id": 101, "name": "Backend-разработчик (Java)"},
+            {"id": 102, "name": "Frontend-разработчик (React)"},
+        ]
+        with patch.object(tp, "all_jobs", return_value=jobs):
+            resp = srv.handle_message(
+                {"jsonrpc": "2.0", "id": 24, "method": "tools/call", "params": {"name": "potok_jobs_find", "arguments": {"query": "разработчик", "top": 1}}}
+            )
+        self.assertFalse(resp["result"]["isError"])
+        body = json.loads(resp["result"]["content"][0]["text"])
+        self.assertEqual(len(body["matches"]), 1)
+
+        with patch.object(tp, "all_jobs", side_effect=AssertionError("should not be called")):
+            resp = srv.handle_message(
+                {"jsonrpc": "2.0", "id": 25, "method": "tools/call", "params": {"name": "potok_jobs_find", "arguments": {"query": "разработчик", "top": 0}}}
             )
         self.assertTrue(resp["result"]["isError"])
 

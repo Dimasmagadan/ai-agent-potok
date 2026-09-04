@@ -105,20 +105,26 @@ def all_jobs(warnings=None):
     return list(_paginate_page("/jobs.json", {"by_scope": "all"}, warnings))
 
 
-def find_jobs_by_name(jobs, query):
+def find_jobs_by_name(jobs, query, top=20):
     """Резолв названия вакансии в ID для reopen/дальнейших вызовов. Токен-OR по `name`,
-    ранжировано по числу совпавших токенов; без стемминга/синонимов (это забота вызывающего LLM)."""
+    ранжировано по числу совпавших токенов; без стемминга/синонимов (это забота вызывающего LLM).
+    Вакансии без ID пропускаются; результат ограничен `top` (None — без ограничения)."""
     query_tokens = set(_tokens(query))
     if not query_tokens:
         raise ValueError("query должен быть непустой строкой")
+    if top is not None and (isinstance(top, bool) or not isinstance(top, int) or top < 1):
+        raise ValueError("top должен быть положительным целым числом")
     results = []
     for j in jobs:
+        jid = j.get("id")
+        if jid is None:
+            continue
         name = j.get("name") or ""
         overlap = query_tokens & set(_tokens(name))
         if overlap:
-            results.append({"id": j["id"], "name": name, "score": len(overlap)})
+            results.append({"id": jid, "name": name, "score": len(overlap)})
     results.sort(key=lambda r: (-r["score"], r["id"]))
-    return results
+    return results[:top] if top is not None else results
 
 
 def all_applicants(warnings=None):
@@ -1331,6 +1337,7 @@ def main():
 
     p_jobsfind = sub.add_parser("jobs-find", help="найти внутренние вакансии по названию (резолв имени в ID для reopen)")
     p_jobsfind.add_argument("query", help="строка запроса, например 'разработчик'")
+    p_jobsfind.add_argument("--top", type=_positive_int, default=20)
 
     p_search = sub.add_parser("search", help="поиск по резерву")
     p_search.add_argument(
@@ -1363,7 +1370,9 @@ def main():
     elif args.cmd == "dedup":
         print(json.dumps(find_duplicates(warnings=warnings), ensure_ascii=False, indent=2))
     elif args.cmd == "jobs-find":
-        print(json.dumps(find_jobs_by_name(all_jobs(warnings), args.query), ensure_ascii=False, indent=2))
+        if not args.query.strip():
+            sys.exit("query должен быть непустой строкой")
+        print(json.dumps(find_jobs_by_name(all_jobs(warnings), args.query, top=args.top), ensure_ascii=False, indent=2))
     elif args.cmd == "search":
         terms = json.loads(args.terms_json)
         if args.reserve_file:
