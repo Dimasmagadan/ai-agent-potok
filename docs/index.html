@@ -3,76 +3,128 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Read-only AI-агент для рекрутмента в Потоке: кадровый резерв, дубли, вакансии и внутренняя мобильность.">
+  <meta name="description" content="Read-only AI-агент для рекрутмента в Потоке: ранжированная выдача кандидатов и вакансий по запросу обычным языком.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23186978'/%3E%3Cpath d='M18 17h28v9H35v21h-9V26H18z' fill='white'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
-  <title>AI-агент для рекрутмента в Потоке</title>
+  <script src="demo.js" defer></script>
+  <title>potok/agent — AI-агент для рекрутмента</title>
 </head>
 <body>
   <div class="wrap">
-    <nav>
+    <nav aria-label="Основная навигация">
       <a class="brand" href="./">potok<span>/</span>agent</a>
-      <a class="nav-link" href="https://github.com/Dimasmagadan/ai-agent-potok">Репозиторий на GitHub &nearr;</a>
+      <div class="nav-links">
+        <a href="#capabilities">Возможности</a>
+        <a href="#how-it-works">Как работает</a>
+        <a href="#start">Запуск</a>
+      </div>
+      <a class="nav-link" href="https://github.com/Dimasmagadan/ai-agent-potok" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
     </nav>
 
     <main>
-      <section class="hero">
-        <div>
-          <div class="eyebrow">AI Agent Challenge 2026</div>
-          <h1>Рекрутинг без лишних действий в ATS.</h1>
-          <p class="lead">AI-агент для «Потока» помогает находить кандидатов, вакансии и карьерные возможности, не меняя данные в системе.</p>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">AI Agent Challenge 2026 · Open Source</p>
+          <h1 id="hero-title">Спросите свою ATS. Получите ответ, а не список фильтров.</h1>
+          <p class="lead">AI-агент для «Потока» находит кандидатов, вакансии и карьерные возможности по запросу обычным языком — с объяснением результата и без изменения данных в ATS.</p>
           <div class="actions">
-            <a class="button primary" href="https://github.com/Dimasmagadan/ai-agent-potok">Открыть проект</a>
-            <a class="button" href="#start">Запустить за 30 секунд</a>
+            <a class="button primary" href="#demo" data-demo-link>Попробовать демо</a>
+            <a class="button" href="https://github.com/Dimasmagadan/ai-agent-potok" target="_blank" rel="noopener noreferrer">Посмотреть код ↗</a>
           </div>
         </div>
-        <aside class="panel">
-          <h2>Задайте вопрос обычным языком</h2>
-          <div class="prompt">«Найди backend-разработчиков в резерве со знанием Python и FastAPI»</div>
-          <div class="prompt">«Кого стоит пересмотреть после расширения вилки?»</div>
-          <div class="prompt">«Какие вакансии мне подходят и чего не хватает для роли №9?»</div>
-        </aside>
+
+        <section class="demo" id="demo" aria-labelledby="demo-title">
+          <header class="demo-header">
+            <h2 id="demo-title">Локальное демо</h2>
+            <span>Вымышленные данные</span>
+            <strong>READ ONLY</strong>
+          </header>
+          <div class="demo-query"><span>Запрос</span><p data-demo-query>Найди backend-разработчиков в резерве со знанием Python и FastAPI</p></div>
+          <p class="demo-note">Демонстрация использует заранее подготовленные результаты.</p>
+          <div class="demo-chips" aria-label="Готовые сценарии">
+            <button type="button" aria-pressed="true" data-scenario="reserve">Кандидаты в резерве</button>
+            <button type="button" aria-pressed="false" data-scenario="reopen">Пересмотр после новой вилки</button>
+            <button type="button" aria-pressed="false" data-scenario="job">Внутренняя вакансия</button>
+          </div>
+          <p class="demo-status" aria-live="polite" data-demo-status>Готово: показан демонстрационный результат.</p>
+          <div class="demo-results" data-demo-results>
+            <article class="result-card">
+              <div class="result-topline"><span class="avatar" aria-hidden="true">АК</span><strong>Анна К.</strong><span>2 подтверждённых совпадения</span></div>
+              <ul class="signals">
+                <li><b>Python</b><span>исходный критерий</span></li>
+                <li><b>FastAPI</b><span>найдено в резюме</span></li>
+                <li><b>Кадровый резерв</b></li>
+              </ul>
+              <p class="result-disclaimer">Демонстрационный порядок, не оценка вероятности найма</p>
+              <button class="evidence-toggle" type="button" aria-expanded="false" aria-controls="evidence-reserve-anna">Почему найден</button>
+              <div class="evidence" id="evidence-reserve-anna" aria-label="Подтверждения для Анны К." hidden>
+                <dl>
+                  <div><dt>Python</dt><dd>Исходный критерий · теги</dd></div>
+                  <div><dt>FastAPI</dt><dd>Исходный критерий · резюме: «Разрабатывала сервисы на FastAPI для внутренних команд»</dd></div>
+                </dl>
+              </div>
+              <small>Демонстрационные данные</small>
+            </article>
+          </div>
+          <footer class="demo-footer">Только чтение · данные ATS не изменялись</footer>
+        </section>
       </section>
     </main>
   </div>
 
-  <hr class="rule">
+  <section class="comparison" aria-labelledby="comparison-title">
+    <div class="wrap">
+      <p class="section-label">Подход</p>
+      <h2 id="comparison-title">Не ещё один набор фильтров</h2>
+      <div class="comparison-grid">
+        <div class="comparison-head">Обычный поиск в ATS</div><div class="comparison-head accent">potok/agent</div>
+        <div>Настроить несколько фильтров</div><div>Описать задачу одной фразой</div>
+        <div>Просмотреть десятки карточек</div><div>Получить ранжированный shortlist</div>
+        <div>Самостоятельно проверять совпадения</div><div>Увидеть критерии и источники совпадений</div>
+        <div>Повторно собирать поиск при новых условиях</div><div>Спросить, кого стоит пересмотреть</div>
+      </div>
+    </div>
+  </section>
 
-  <section class="wrap">
-    <div class="section-label">Пять рабочих сценариев</div>
-    <h2>От резерва до внутренней мобильности</h2>
+  <section class="wrap" id="capabilities" aria-labelledby="capabilities-title">
+    <p class="section-label">Пять рабочих сценариев</p>
+    <h2 id="capabilities-title">От резерва до внутренней мобильности</h2>
     <div class="features">
-      <article class="feature"><div class="number">01</div><h3>Кадровый резерв</h3><p>Понимает запрос в свободной форме, учитывает синонимы, ранжирует кандидатов и показывает подтверждающие цитаты.</p></article>
-      <article class="feature"><div class="number">02</div><h3>Дедупликация</h3><p>Находит карточки с одинаковыми нормализованными телефоном или адресом электронной почты, без догадок по ФИО.</p></article>
-      <article class="feature"><div class="number">03</div><h3>Возврат кандидатов</h3><p>Показывает, к кому вернуться после изменения вилки, графика, локации, опыта или профиля роли.</p></article>
-      <article class="feature"><div class="number">04</div><h3>Подбор вакансий</h3><p>Соискатель описывает опыт в свободной форме и получает подходящие открытые вакансии с ссылкой для отклика.</p></article>
-      <article class="feature"><div class="number">05</div><h3>Внутренняя мобильность</h3><p>Сотрудники видят подходящие роли, включая неопубликованные, и понимают, чего может не хватать для конкретной вакансии.</p></article>
-      <article class="feature"><div class="number">&infin;</div><h3>Безопасно по умолчанию</h3><p>Только чтение: никаких тегов, комментариев, перемещений по воронке или откликов от имени человека.</p></article>
+      <article class="feature feature-flip"><button class="feature-front" type="button" aria-expanded="false"><div class="number">01</div><p class="role">Рекрутер</p><h3>Кадровый резерв</h3><p class="example">«Найди Python-разработчиков в резерве»</p><p>Кандидаты по исходным термам, синонимам и тексту CV.</p><span class="feature-action">Подробнее</span></button><div class="feature-back"><h3>Не терять сильных кандидатов</h3><p>Когда вакансия закрыта, подходящие люди часто остаются в кадровом резерве. Рекрутёр описывает новую задачу одной фразой и получает shortlist с термами, синонимами и короткими подтверждениями из резюме.</p><button type="button">Назад</button></div></article>
+      <article class="feature feature-flip"><button class="feature-front" type="button" aria-expanded="false"><div class="number">02</div><p class="role">Рекрутер</p><h3>Дедупликация</h3><p class="example">«Покажи возможные дубли»</p><p>Пары карточек с одинаковым нормализованным телефоном или email.</p><span class="feature-action">Подробнее</span></button><div class="feature-back"><h3>Чистая база без догадок</h3><p>Агент показывает только пары с точно совпавшим нормализованным телефоном или email. Он не предполагает, что два похожих имени принадлежат одному человеку: решение о работе с дублем остаётся за рекрутёром.</p><button type="button">Назад</button></div></article>
+      <article class="feature feature-flip"><button class="feature-front" type="button" aria-expanded="false"><div class="number">03</div><p class="role">Рекрутер</p><h3>Возврат кандидатов</h3><p class="example">«Кого пересмотреть после новой вилки?»</p><p>Наблюдаемые сигналы после подтверждённого изменения условий.</p><span class="feature-action">Подробнее</span></button><div class="feature-back"><h3>Вернуться к разговору вовремя</h3><p>После подтверждённого изменения вилки, графика или требований рекрутёр может спросить, кого стоит пересмотреть. Агент сопоставляет старые и новые условия с наблюдаемыми сигналами, но не восстанавливает историю вакансии сам.</p><button type="button">Назад</button></div></article>
+      <article class="feature feature-flip"><button class="feature-front" type="button" aria-expanded="false"><div class="number">04</div><p class="role">Соискатель</p><h3>Подбор вакансий</h3><p class="example">«Ищу удалённую Python-вакансию»</p><p>Открытые вакансии с evidence и ссылкой для самостоятельного отклика.</p><span class="feature-action">Подробнее</span></button><div class="feature-back"><h3>Понятный следующий шаг</h3><p>Соискатель описывает опыт и пожелания обычным языком. В ответ он получает подходящие открытые вакансии с подтверждениями совпадений и ссылкой, по которой может откликнуться самостоятельно.</p><button type="button">Назад</button></div></article>
+      <article class="feature feature-flip"><button class="feature-front" type="button" aria-expanded="false"><div class="number">05</div><p class="role">Сотрудник</p><h3>Внутренняя мобильность</h3><p class="example">«Какая роль мне подходит?»</p><p>Внутренние роли, пробелы и неизвестные критерии.</p><span class="feature-action">Подробнее</span></button><div class="feature-back"><h3>Карьерный рост внутри компании</h3><p>У компании могут быть внутренние вакансии, о которых сотрудник ещё не знает. Он описывает свой опыт или предоставляет профиль, а агент показывает подходящие роли и объясняет, какие требования уже совпали, что стоит развить для следующего грейда и какие данные пока неизвестны.</p><button type="button">Назад</button></div></article>
     </div>
   </section>
 
-  <section id="start" class="wrap how">
-    <div>
-      <div class="section-label">Быстрый старт</div>
-      <h2>Проверьте проект без доступа к API</h2>
-      <p>В репозитории есть обезличенные данные и локальная имитация API. Нужен только Python 3.</p>
-    </div>
-    <ol class="steps">
-      <li><strong>Клонируйте репозиторий</strong><span><code>git clone https://github.com/Dimasmagadan/ai-agent-potok.git</code></span></li>
-      <li><strong>Запустите тесты</strong><span><code>make test</code> запускает 136 автономных тестов без сети.</span></li>
-      <li><strong>Посмотрите демо</strong><span><code>make demo</code> последовательно показывает ключевые сценарии на локальном API.</span></li>
-    </ol>
-  </section>
-
-  <section class="wrap">
-    <div class="cta">
-      <div class="section-label">Открытый исходный код, MIT</div>
-      <h2>Подключите агента к рекрутинговым процессам.</h2>
-      <p>Используйте как чат-скилл, MCP-сервер для Claude Desktop и Cursor или Telegram-бот для соискателей и сотрудников.</p>
-      <div class="actions"><a class="button primary" href="https://github.com/Dimasmagadan/ai-agent-potok">Репозиторий на GitHub</a><a class="button" href="README.md">Документация API</a></div>
+  <section class="safety" aria-labelledby="safety-title">
+    <div class="wrap safety-grid">
+      <div><p class="section-label">Границы агента</p><h2 id="safety-title">Видит возможности. Не меняет данные.</h2><p>Агент читает доступные данные через API «Потока». Решения и действия остаются за человеком.</p></div>
+      <div><strong class="read-only">READ ONLY · 0 изменений в ATS</strong><ul><li>Не меняет статусы кандидатов</li><li>Не добавляет теги и комментарии</li><li>Не перемещает кандидатов по воронке</li><li>Не отправляет отклики или сообщения от имени человека</li></ul></div>
     </div>
   </section>
 
-  <footer class="wrap"><a href="https://github.com/Dimasmagadan/ai-agent-potok">GitHub</a><a href="https://events.potok.io/ai_agent_hr_contest">Potok AI Agent Challenge</a><a href="https://github.com/Dimasmagadan/ai-agent-potok/blob/master/LICENSE">MIT License</a></footer>
+  <section class="wrap process" id="how-it-works" aria-labelledby="process-title">
+    <p class="section-label">Наблюдаемый процесс</p>
+    <h2 id="process-title">Как это работает</h2>
+    <ol class="process-steps"><li><span>01</span>Запрос обычным языком</li><li><span>02</span>Критерии и варианты написания</li><li><span>03</span>Чтение данных через доступный API</li><li><span>04</span>Детерминированное ранжирование с источниками совпадений</li></ol>
+    <p class="channels">Chat skill / MCP / Telegram <b>→</b> agent <b>→</b> Potok API / Career API</p>
+    <p class="process-note">Доступный источник зависит от сценария: публичный подбор вакансий использует Career API, внутренние сценарии — авторизованный API «Потока».</p>
+  </section>
+
+  <section class="proof"><div class="wrap"><strong>136 автономных тестов</strong><span>без внешней сети</span><span>Python 3</span><span>MIT</span><span>MCP</span><small>Основной Python-код — без сторонних зависимостей</small></div></section>
+
+  <section class="wrap quickstart" id="start" aria-labelledby="start-title">
+    <div><p class="section-label">Быстрый старт</p><h2 id="start-title">Запустите демо локально</h2><p><code>make demo</code> поднимает локальный mock API и запускает основные сценарии на обезличенных fixtures. Токен и аккаунт «Потока» не нужны.</p></div>
+    <div class="command-block"><pre data-copy-source><code>git clone https://github.com/Dimasmagadan/ai-agent-potok.git
+cd ai-agent-potok
+make test
+make demo</code></pre><button class="button" type="button" data-copy-button>Скопировать команды</button><p class="copy-status" aria-live="polite" data-copy-status></p></div>
+  </section>
+
+  <section class="wrap"><div class="cta"><p class="section-label">Открытый исходный код, MIT</p><h2>Подключите агента к рекрутинговым процессам</h2><p>Используйте его как чат-скилл, MCP-сервер или основу Telegram-бота для соискателей и сотрудников.</p><div class="actions"><a class="button primary" href="https://github.com/Dimasmagadan/ai-agent-potok" target="_blank" rel="noopener noreferrer">Открыть репозиторий ↗</a><a class="button" href="https://github.com/Dimasmagadan/ai-agent-potok#быстрый-старт" target="_blank" rel="noopener noreferrer">Изучить документацию</a></div></div></section>
+
+  <footer class="wrap"><a href="https://github.com/Dimasmagadan/ai-agent-potok" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://events.potok.io/ai_agent_hr_contest" target="_blank" rel="noopener noreferrer">Potok AI Agent Challenge</a><a href="https://github.com/Dimasmagadan/ai-agent-potok/blob/master/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a></footer>
 </body>
 </html>
