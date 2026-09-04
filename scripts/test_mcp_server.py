@@ -28,6 +28,26 @@ class ProtocolTests(unittest.TestCase):
         for tool in resp["result"]["tools"]:
             self.assertFalse(tool["inputSchema"].get("additionalProperties", True))
 
+    def test_reopen_schema_describes_required_salary_context(self):
+        resp = srv.handle_message({"jsonrpc": "2.0", "id": 11, "method": "tools/list"})
+        tools = resp["result"]["tools"]
+        reopen = next(tool for tool in tools if tool["name"] == "potok_reopen")
+        request = reopen["inputSchema"]["properties"]["request"]
+        self.assertIn("target_job_id", request["properties"])
+        self.assertIn("previous_criteria", request["properties"])
+        self.assertIn("salary_to", reopen["inputSchema"]["$defs"]["criteria"]["properties"])
+        self.assertIn("Не передавай changes", reopen["description"])
+
+    def test_jobs_match_schema_describes_profile_terms_and_filters(self):
+        resp = srv.handle_message({"jsonrpc": "2.0", "id": 12, "method": "tools/list"})
+        tools = resp["result"]["tools"]
+        jobs_match = next(tool for tool in tools if tool["name"] == "potok_jobs_match")
+        profile = jobs_match["inputSchema"]["properties"]["profile"]
+        self.assertIn("terms", profile["properties"])
+        self.assertIn("filters", profile["properties"])
+        self.assertEqual(profile["properties"]["terms"]["items"]["required"], ["term", "kind"])
+        self.assertIn("salary_from", profile["properties"]["filters"]["properties"])
+
     def test_unknown_method_returns_dash_32601(self):
         resp = srv.handle_message({"jsonrpc": "2.0", "id": 3, "method": "does_not_exist"})
         self.assertEqual(resp["error"]["code"], -32601)
@@ -64,13 +84,15 @@ class ToolCallTests(unittest.TestCase):
             )
         self.assertTrue(resp["result"]["isError"])
 
-    def test_jobs_match_valid_profile_calls_match_jobs(self):
-        with patch.object(js, "fetch_jobs_constructor", return_value=[{"id": 1}]), patch.object(js, "match_jobs", return_value=[{"job_id": 1}]) as match_jobs:
+    def test_jobs_match_valid_profile_calls_match_jobs_and_returns_gaps(self):
+        job = {"id": 1, "title": "Python developer", "key_skills": []}
+        with patch.object(js, "fetch_jobs_constructor", return_value=[job]), patch.object(js, "match_jobs", return_value={"jobs": [{"id": 1}]}) as match_jobs, patch.object(js, "compute_gaps", return_value=([], ["salary"])):
             resp = srv.handle_message(
                 {"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "potok_jobs_match", "arguments": {"profile": {"terms": []}}}}
             )
         self.assertFalse(resp["result"]["isError"])
         self.assertTrue(match_jobs.called)
+        self.assertIn('"unknown_fields": [', resp["result"]["content"][0]["text"])
 
 
 if __name__ == "__main__":
